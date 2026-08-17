@@ -71,6 +71,9 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .postcode-row input { width: 100%; min-height: 56px; padding: 0 18px; color: var(--ink); background: white; border: 1px solid rgba(33,46,35,.22); border-radius: 10px; font-size: 20px; font-weight: 500; letter-spacing: .08em; }
 .form-meta { margin-top: 11px; text-align: right; color: var(--sage); font-size: 11px; }
 .form-meta a { border-bottom: 1px solid var(--bronze); color: var(--ink); }
+.hero-actions { max-width: 560px; margin-top: 35px; display: flex; align-items: center; gap: 22px; }
+.hero-actions > p { color: var(--sage); font-size: 11px; line-height: 1.5; }
+.hero-actions > p a { color: var(--ink); border-bottom: 1px solid var(--bronze); }
 .proofs { margin-top: 31px; display: grid; grid-template-columns: repeat(2,1fr); gap: 10px 22px; color: var(--ink); font-size: 11px; }
 .proofs span::first-letter { color: var(--bronze); }
 .tax-note { margin-top: 18px; color: var(--bronze); font-size: 11px; }
@@ -177,10 +180,11 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .tax-section .text-link { display: flex; width: 340px; }
 .recurring-section h2 { max-width: 900px; margin: 48px 0 65px; }
 .frequency-grid { display: grid; grid-template-columns: repeat(4,1fr); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
-.frequency-grid button { position: relative; min-height: 190px; padding: 30px 23px; text-align: left; cursor: pointer; border: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: transparent; font-family: var(--display); font-size: 24px; transition: color 160ms, background 160ms; }
-.frequency-grid button:hover, .frequency-grid button.recommended { color: var(--paper); background: var(--ink); }
-.frequency-grid button span { position: absolute; bottom: 25px; left: 23px; color: var(--sage); font-family: var(--sans); font-size: 10px; letter-spacing: .1em; }
-.frequency-grid button b { position: absolute; top: 0; right: 0; padding: 7px 9px; color: var(--paper); background: var(--bronze); font-family: var(--sans); font-size: 7px; letter-spacing: .16em; text-transform: uppercase; }
+.frequency-grid a { position: relative; min-height: 190px; padding: 30px 23px; text-align: left; cursor: pointer; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: transparent; font-family: var(--display); font-size: 24px; transition: color 160ms, background 160ms, transform 160ms; }
+.frequency-grid a:hover, .frequency-grid a.recommended { color: var(--paper); background: var(--ink); }
+.frequency-grid a:hover { transform: translateY(-3px); }
+.frequency-grid a span { position: absolute; bottom: 25px; left: 23px; color: var(--sage); font-family: var(--sans); font-size: 10px; letter-spacing: .1em; }
+.frequency-grid a b { position: absolute; top: 0; right: 0; padding: 7px 9px; color: var(--paper); background: var(--bronze); font-family: var(--sans); font-size: 7px; letter-spacing: .16em; text-transform: uppercase; }
 
 .faq-section { padding: 125px 7vw; display: grid; grid-template-columns: .8fr 1.2fr; gap: 10vw; color: var(--paper); background: var(--ink); }
 .faq-section h2 { margin-top: 45px; }
@@ -247,6 +251,14 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .task-card > div > span { color: var(--sage); font-size: 10px; line-height: 1.4; }
 .task-card > i { position: absolute; top: 10px; right: 10px; width: 25px; height: 25px; display: grid; place-items: center; color: var(--bronze); background: var(--paper); border: 1px solid var(--line); border-radius: 50%; font-size: 11px; font-style: normal; }
 .unknown-link { margin-top: 22px; padding: 0 0 8px; color: var(--bronze); background: transparent; border: 0; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 10px; letter-spacing: .15em; text-transform: uppercase; }
+.unknown-link.selected { color: var(--ink); border-color: var(--bronze); }
+.unknown-panel { margin-top: 16px; padding: 28px; color: var(--paper); background: var(--ink); border-left: 3px solid var(--bronze); }
+.unknown-panel h2 { font-size: 27px; }
+.unknown-panel > p { max-width: 590px; margin: 7px 0 20px; color: rgba(246,244,235,.65); font-size: 10px; line-height: 1.6; }
+.unknown-panel > label:not(.unknown-upload) { display: block; color: var(--paper); font-size: 10px; }
+.unknown-panel textarea { width: 100%; min-height: 110px; margin-top: 8px; padding: 14px; resize: vertical; color: var(--ink); background: var(--paper); border: 0; border-radius: 9px; font: inherit; }
+.unknown-upload { margin-top: 12px; padding: 12px 15px; display: inline-flex; color: var(--ink); background: var(--paper); border-radius: 9px; cursor: pointer; font-size: 9px; letter-spacing: .12em; text-transform: uppercase; }
+.unknown-upload input { display: none; }
 .detail-card, .checkout-card { margin-top: 16px; padding: 28px; background: var(--paper); border: 1px solid rgba(33,46,35,.1); }
 .detail-card > h2, .checkout-card > h2, .payment-head h2 { padding-bottom: 18px; border-bottom: 1px solid var(--line); font-size: 27px; }
 .choice-field { min-width: 0; margin: 25px 0 0; padding: 0; border: 0; }
@@ -270,13 +282,22 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .recommendation strong { display: block; margin: 7px 0 3px; font-family: var(--display); font-size: 28px; }
 .recommendation p { color: rgba(246,244,235,.62); font-size: 11px; }
 .recommendation i { position: absolute; top: 27px; right: 27px; width: 38px; height: 38px; display: grid; place-items: center; color: var(--ink); background: var(--paper); border-radius: 50%; font-style: normal; }
-.duration-grid { margin-top: 10px; display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; }
-.duration-grid button { position: relative; min-height: 110px; padding: 18px 12px; text-align: left; cursor: pointer; background: var(--paper); border: 1px solid rgba(33,46,35,.14); border-radius: 11px; }
+.duration-grid { margin-top: 10px; display: grid; grid-template-columns: repeat(5,1fr); gap: 8px; }
+.duration-grid button { position: relative; min-height: 110px; padding: 18px 12px; text-align: left; overflow: hidden; cursor: pointer; background: var(--paper); border: 1px solid rgba(33,46,35,.14); border-radius: 11px; }
 .duration-grid button.selected { border-color: var(--bronze); box-shadow: inset 0 0 0 1px var(--bronze); }
 .duration-grid strong, .duration-grid span { display: block; }
 .duration-grid strong { font-family: var(--display); font-size: 19px; }
 .duration-grid span { margin-top: 5px; color: var(--sage); font-size: 10px; }
-.duration-grid b { position: absolute; bottom: 0; left: 0; right: 0; padding: 6px; color: var(--paper); background: var(--bronze); font-size: 7px; font-weight: 400; letter-spacing: .14em; text-transform: uppercase; }
+.duration-grid b { position: absolute; bottom: 0; left: 0; right: 0; padding: 6px; color: var(--paper); background: var(--bronze); border-radius: 0 0 10px 10px; font-size: 7px; font-weight: 400; letter-spacing: .14em; text-transform: uppercase; }
+.duration-grid .duration-more { text-align: center; }
+.duration-grid .duration-more strong { font-size: 32px; line-height: .8; }
+.custom-duration { margin-top: 9px; padding: 18px 20px; display: flex; align-items: center; gap: 18px; background: var(--paper); border: 1px solid rgba(33,46,35,.12); border-radius: 11px; }
+.custom-duration > label { font-size: 11px; font-weight: 500; }
+.custom-duration > div { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.custom-duration button { width: 36px; height: 36px; cursor: pointer; color: var(--paper); background: var(--ink); border: 0; border-radius: 8px; font-size: 18px; }
+.custom-duration input { width: 76px; height: 36px; text-align: center; background: white; border: 1px solid rgba(33,46,35,.18); border-radius: 8px; font: inherit; }
+.custom-duration > div > span { color: var(--sage); font-size: 10px; }
+.custom-duration > small { color: var(--sage); font-size: 8px; }
 .priority-card, .waste-card { margin-top: 18px; padding: 27px; background: var(--paper); border: 1px solid rgba(33,46,35,.1); }
 .priority-card h2, .waste-card h2 { margin-bottom: 20px; font-size: 25px; }
 .priority-card > div { padding: 13px 0; display: grid; grid-template-columns: 30px 1fr 34px 34px; align-items: center; border-top: 1px solid var(--line); }
@@ -292,6 +313,9 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .schedule-tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--line); }
 .schedule-tabs button { padding: 0 0 13px; cursor: pointer; background: transparent; border: 0; font-size: 10px; }
 .schedule-tabs button.selected { color: var(--bronze); border-bottom: 2px solid var(--bronze); }
+.custom-date { margin: 22px 0 30px; padding: 20px; display: flex; align-items: center; justify-content: space-between; gap: 20px; background: var(--paper); border: 1px solid rgba(33,46,35,.12); }
+.custom-date label { font-size: 11px; font-weight: 500; }
+.custom-date input { min-height: 46px; padding: 0 13px; color: var(--ink); background: white; border: 1px solid rgba(33,46,35,.18); border-radius: 9px; font: inherit; }
 .date-strip { margin: 22px 0 30px; display: grid; grid-template-columns: repeat(5,1fr); gap: 8px; }
 .date-strip button { min-height: 80px; cursor: pointer; background: var(--paper); border: 1px solid rgba(33,46,35,.12); border-radius: 10px; color: var(--sage); font-size: 9px; text-transform: uppercase; }
 .date-strip button strong { display: block; margin-top: 5px; color: var(--ink); font-family: var(--display); font-size: 23px; }
@@ -332,6 +356,9 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .form-grid { margin-top: 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px 12px; }
 .form-grid label:first-child { grid-column: 1/-1; }
 .form-grid label { margin: 0; }
+.checkout-helper { margin: -6px 0 20px; color: var(--sage); font-size: 10px; }
+.address-checkout .field-group { padding: 0; border: 0; }
+.checkout-address-card { margin-top: 14px; }
 .payment-head { display: flex; justify-content: space-between; align-items: baseline; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
 .payment-head h2 { padding: 0; border: 0; }
 .payment-head span { color: var(--sage); font-size: 9px; }
@@ -649,11 +676,12 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
   .booking-layout { max-width: 720px; padding-inline: 28px; grid-template-columns: 1fr; }
   .booking-summary { display: none; }
   .booking-main { padding-bottom: 70px; }
-  .mobile-price-bar { position: fixed; z-index: 60; left: 0; right: 0; bottom: 0; min-height: calc(76px + env(safe-area-inset-bottom,0px)); padding: 10px 18px calc(10px + env(safe-area-inset-bottom,0px)); display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 18px; background: rgba(246,244,235,.96); backdrop-filter: blur(12px); border-top: 1px solid var(--line); box-shadow: 0 -8px 30px rgba(33,46,35,.08); }
+  .mobile-price-bar { position: fixed; z-index: 60; left: 0; right: 0; bottom: 0; min-height: calc(76px + env(safe-area-inset-bottom,0px)); padding: 10px 18px calc(10px + env(safe-area-inset-bottom,0px)); display: grid; grid-template-columns: 42px 1fr auto; align-items: center; gap: 12px; background: rgba(246,244,235,.96); backdrop-filter: blur(12px); border-top: 1px solid var(--line); box-shadow: 0 -8px 30px rgba(33,46,35,.08); }
   .mobile-price-bar strong, .mobile-price-bar small { display: block; }
   .mobile-price-bar strong { font-family: var(--display); font-size: 24px; }
   .mobile-price-bar small { color: var(--sage); font-size: 9px; }
   .mobile-price-bar button, .mobile-price-bar a { min-height: 50px; padding: 0 24px; display: grid; place-items: center; color: var(--paper); background: var(--ink); border: 0; border-radius: 10px; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+  .mobile-price-bar .mobile-back { width: 42px; min-height: 42px; padding: 0; color: var(--ink); background: transparent; border: 1px solid rgba(33,46,35,.18); border-radius: 50%; font-size: 18px; }
   .booking-actions { display: none; }
 }
 
@@ -671,6 +699,9 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
   .choice-row.visual { grid-template-columns: repeat(3,1fr); }
   .choice-row.visual button { min-width: 0; padding-inline: 9px; }
   .duration-grid { grid-template-columns: 1fr 1fr; }
+  .custom-duration { align-items: flex-start; flex-wrap: wrap; }
+  .custom-duration > div { margin-left: 0; }
+  .custom-duration > small { width: 100%; }
   .waste-card > div, .slot-grid, .access-grid { grid-template-columns: 1fr; }
   .date-strip { display: flex; overflow-x: auto; padding-bottom: 7px; }
   .date-strip button { flex: 0 0 78px; }

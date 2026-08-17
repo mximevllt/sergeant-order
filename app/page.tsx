@@ -37,14 +37,10 @@ export default function Home() {
           <p className="kicker">Jardinage à domicile · Réservation en ligne</p>
           <h1>Votre jardin entretenu, <em>sans passer un seul appel.</em></h1>
           <p className="hero-lead">Choisissez les travaux, la durée et votre créneau. Votre prix se calcule immédiatement et nous venons avec tout le matériel.</p>
-          <form className="postcode-form" action="/reserver">
-            <label htmlFor="cp">Code postal du jardin</label>
-            <div className="postcode-row">
-              <input id="cp" name="cp" inputMode="numeric" pattern="[0-9]{5}" maxLength={5} defaultValue="83170" aria-describedby="postcode-help" />
-              <button className="button button-primary" type="submit">Commencer ma réservation <span>→</span></button>
-            </div>
-            <p id="postcode-help" className="form-meta">Déjà client ? <a href="/espace-client">Reprogrammer une intervention</a></p>
-          </form>
+          <div className="hero-actions">
+            <a className="button button-primary" href="/reserver">Commencer ma réservation <span>→</span></a>
+            <p>Déjà client ? <a href="/espace-client">Reprogrammer une intervention</a></p>
+          </div>
           <div className="proofs" aria-label="Les engagements Sergeant Paysage">
             <span>✓ Prix connu à l’avance</span><span>✓ Matériel professionnel inclus</span><span>✓ Réservation 100 % en ligne</span><span>✓ Intervention assurée</span>
           </div>
@@ -145,10 +141,10 @@ export default function Home() {
         <SectionLabel number="06">Entretien régulier</SectionLabel>
         <h2>Et si votre jardin restait <em>toujours comme ça ?</em></h2>
         <div className="frequency-grid">
-          <button>Toutes les 2 semaines<span>Jardin très suivi</span></button>
-          <button className="recommended"><b>Recommandé</b>Toutes les 4 semaines<span>Le bon rythme saisonnier</span></button>
-          <button>Toutes les 6 semaines<span>Entretien essentiel</span></button>
-          <button>Sur mesure<span>Un calendrier adapté</span></button>
+          <a href="/reserver?recurrence=2-semaines">Toutes les 2 semaines<span>Jardin très suivi</span></a>
+          <a className="recommended" href="/reserver?recurrence=4-semaines"><b>Recommandé</b>Toutes les 4 semaines<span>Le bon rythme saisonnier</span></a>
+          <a href="/reserver?recurrence=6-semaines">Toutes les 6 semaines<span>Entretien essentiel</span></a>
+          <a href="/reserver?recurrence=sur-mesure">Sur mesure<span>Un calendrier adapté</span></a>
         </div>
       </section>
 
