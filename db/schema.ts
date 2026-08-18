@@ -99,6 +99,7 @@ export const authSessions = sqliteTable("auth_sessions", {
 export const magicLinkTokens = sqliteTable("magic_link_tokens", {
   id: text("id").primaryKey(),
   emailNormalized: text("email_normalized").notNull(),
+  requestedName: text("requested_name"),
   tokenHash: text("token_hash").notNull(),
   purpose: text("purpose", { enum: ["SIGN_IN", "VERIFY_EMAIL", "CHANGE_EMAIL"] }).notNull(),
   returnTo: text("return_to"),
@@ -109,6 +110,8 @@ export const magicLinkTokens = sqliteTable("magic_link_tokens", {
 }, (table) => [
   uniqueIndex("uq_magic_link_tokens_hash").on(table.tokenHash),
   index("idx_magic_link_tokens_email_expiry").on(table.emailNormalized, table.expiresAt),
+  index("idx_magic_link_tokens_email_created").on(table.emailNormalized, table.createdAt),
+  index("idx_magic_link_tokens_ip_created").on(table.requestedIpHash, table.createdAt),
 ]);
 
 export const organizations = sqliteTable("organizations", {

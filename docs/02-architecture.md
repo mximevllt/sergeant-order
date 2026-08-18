@@ -109,7 +109,9 @@ Les fichiers privés ne seront jamais servis par une adresse publique permanente
 
 ### 4.1 Solution retenue
 
-Choix : **Better Auth avec stockage D1, module Magic Link et envoi par Resend**.
+Choix final d'implémentation : **module d'authentification intégré au monolithe, stockage D1, liens à usage unique et envoi par Resend**.
+
+Le module intégré conserve uniquement des empreintes HMAC des liens et des sessions dans D1, utilise exactement le modèle de données métier et évite une seconde série de tables d'identité. Le comportement utilisateur validé reste identique à celui prévu : connexion sans mot de passe, compte automatique et sessions révocables.
 
 Cette solution permet :
 
@@ -161,7 +163,7 @@ L'Avance immédiate n'est proposée qu'aux particuliers éligibles.
 | Hébergement applicatif | OpenAI Sites / Cloudflare Worker | Exécution du site |
 | Données structurées | Cloudflare D1 | Source de vérité métier |
 | Photos et documents | Cloudflare R2 | Fichiers privés |
-| Authentification | Better Auth | Sessions et liens de connexion |
+| Authentification | Module interne + D1 | Sessions et liens de connexion hachés |
 | Emails | Resend | Connexion, confirmation, rappel, facture |
 | Paiement par carte | Stripe | Carte enregistrée et débit après intervention |
 | Avance immédiate | API Urssaf Tiers de prestation | Inscription et demandes de paiement AICI |
@@ -575,7 +577,7 @@ flowchart LR
 
 | Information | Source de vérité |
 |---|---|
-| Identité connectée | Better Auth + D1 |
+| Identité connectée | Module d'authentification + D1 |
 | Profil et jardins | D1 |
 | Photos et PDF | R2, métadonnées D1 |
 | Catalogue et tarifs | D1, version publiée |
@@ -764,7 +766,7 @@ L'absence d'un accès externe n'empêchera pas de construire l'adaptateur et les
 | Forme du système | Monolithe modulaire | Cohérence et exploitation simple |
 | Base | D1 / SQLite | Intégration native au site et relations suffisantes |
 | Fichiers | R2 privé | Photos et documents hors base |
-| Auth client | Magic link Better Auth | Compte automatique sans mot de passe |
+| Auth client | Magic link interne sur D1 | Compte automatique sans mot de passe et aucun jeton en clair en base |
 | Paiement | Stripe SetupIntent + débit ultérieur | Conforme au paiement après prestation |
 | Crédit immédiat | API Urssaf Tiers de prestation | Parcours officiel de l'entreprise prestataire |
 | Adresse | Géoplateforme | Référentiel français actuel |

@@ -46,7 +46,7 @@ Les groupes sont contrôlés comme des ensembles : dès qu'une variable d'un gro
 
 ### Authentification
 
-- `BETTER_AUTH_SECRET` : signature des sessions et liens de connexion.
+- `AUTH_SECRET` : empreinte cryptographique des sessions, adresses réseau et liens de connexion.
 
 ### Emails transactionnels
 
@@ -140,6 +140,6 @@ Il est interdit de copier des données clients réelles vers la préproduction. 
 - la configuration locale est exploitable sans service réel ;
 - les modèles de préproduction et de production sont prêts à recevoir leurs valeurs dans le coffre de secrets de l'hébergement ;
 - le code sait détecter un mélange dangereux entre environnements ;
-- les futurs branchements D1, R2, Better Auth, Resend, Stripe, Urssaf, Sentry et Turnstile disposent de noms stables ;
+- les futurs branchements D1, R2, authentification, Resend, Stripe, Urssaf, Sentry et Turnstile disposent de noms stables ;
 - aucune clé réelle n'a été demandée, enregistrée ou exposée pendant cette étape ;
 - les ressources distantes seront créées au moment de leurs étapes dédiées, afin d'éviter une infrastructure vide ou mal liée.

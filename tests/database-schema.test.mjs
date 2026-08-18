@@ -161,6 +161,16 @@ test("les données de référence correspondent aux règles commerciales validé
   database.close();
 });
 
+test("la migration d'authentification ajoute les champs et index de limitation", async () => {
+  const database = applyMigrations(await loadMigrations());
+  const columns = database.prepare("PRAGMA table_info(magic_link_tokens)").all();
+  const indexes = database.prepare("PRAGMA index_list(magic_link_tokens)").all();
+  assert.ok(columns.some(({ name }) => name === "requested_name"));
+  assert.ok(indexes.some(({ name }) => name === "idx_magic_link_tokens_email_created"));
+  assert.ok(indexes.some(({ name }) => name === "idx_magic_link_tokens_ip_created"));
+  database.close();
+});
+
 test("le jeu de démonstration est idempotent et clairement isolé", async () => {
   const database = applyMigrations(await loadMigrations());
   const demoSql = await readFile(new URL("../db/seeds/demo.sql", import.meta.url), "utf8");

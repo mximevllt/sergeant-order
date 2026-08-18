@@ -1,0 +1,21 @@
+export const AUTH_COOKIE_NAME: string;
+export const MAGIC_LINK_TTL_SECONDS: number;
+export const CUSTOMER_SESSION_TTL_SECONDS: number;
+export const MAGIC_LINK_EMAIL_LIMIT: number;
+export const MAGIC_LINK_IP_LIMIT: number;
+export const MAGIC_LINK_RATE_WINDOW_MINUTES: number;
+
+export function normalizeEmail(value: unknown): string;
+export function isValidEmail(value: string): boolean;
+export function cleanDisplayName(value: unknown): string | null;
+export function fallbackDisplayName(email: string): string;
+export function safeReturnTo(value: unknown, fallback?: string): string;
+export function isSameOriginRequest(request: Request): boolean;
+export function getClientIp(request: Request): string;
+export function getUserAgent(request: Request): string;
+export function randomToken(byteLength?: number): string;
+export function hashSecret(value: string, secret: string): Promise<string>;
+export function readCookie(cookieHeader: string | null | undefined, name?: string): string | null;
+export function sessionCookie(token: string, secure?: boolean): string;
+export function clearSessionCookie(secure?: boolean): string;
+export function isSecureRequest(request: Request): boolean;

@@ -11,7 +11,7 @@ export const CORE_VARIABLES = Object.freeze([
 ]);
 
 export const SECRET_VARIABLES = Object.freeze([
-  "BETTER_AUTH_SECRET",
+  "AUTH_SECRET",
   "RESEND_API_KEY",
   "STRIPE_SECRET_KEY",
   "STRIPE_WEBHOOK_SECRET",
@@ -22,7 +22,7 @@ export const SECRET_VARIABLES = Object.freeze([
 ]);
 
 export const INTEGRATION_GROUPS = Object.freeze({
-  authentication: ["BETTER_AUTH_SECRET"],
+  authentication: ["AUTH_SECRET"],
   transactionalEmail: ["RESEND_API_KEY", "RESEND_FROM_EMAIL"],
   payments: [
     "STRIPE_SECRET_KEY",

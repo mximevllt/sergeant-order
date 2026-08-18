@@ -514,6 +514,33 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .confirmation-page section > aside strong { font-family: var(--display); font-size: 19px; }
 .confirmation-page section > aside p { margin-top: 5px; color: rgba(246,244,235,.6); font-size: 10px; }
 
+/* Passwordless authentication */
+.login-page { min-height: 100vh; display: grid; grid-template-columns: minmax(360px,.78fr) minmax(520px,1.22fr); background: #ebeae3; }
+.login-brand-panel { min-height: 100vh; padding: 42px 4vw 58px; display: flex; flex-direction: column; justify-content: space-between; color: var(--paper); background: var(--ink); }
+.login-brand-panel > a img { width: 230px; height: auto; object-fit: contain; }
+.login-brand-panel > div { max-width: 480px; }
+.login-brand-panel > div > p { color: var(--bronze); font-size: 9px; letter-spacing: .25em; text-transform: uppercase; }
+.login-brand-panel h2 { margin-top: 20px; font-size: clamp(40px,4.2vw,67px); line-height: 1; }
+.login-brand-panel ul { margin: 45px 0 0; padding: 0; display: grid; gap: 13px; list-style: none; color: rgba(246,244,235,.67); font-size: 11px; }
+.login-brand-panel li::before { content: "✓"; margin-right: 10px; color: var(--bronze); }
+.login-card-wrap { padding: 70px 7vw; display: grid; place-items: center; }
+.login-card { width: min(560px,100%); }
+.login-card > h1, .login-confirmation h1 { margin: 18px 0 15px; font-size: clamp(46px,5vw,72px); line-height: .96; }
+.login-card > p:not(.kicker, .login-banner) { max-width: 520px; color: var(--sage); font-size: 15px; line-height: 1.65; }
+.login-banner, .login-error { margin-top: 22px; padding: 14px 16px; color: #6b2522; background: #f5e5e2; border-left: 3px solid #9b443e; font-size: 11px; line-height: 1.5; }
+.login-form { margin-top: 35px; display: grid; gap: 18px; }
+.login-form label { display: grid; gap: 8px; font-size: 11px; font-weight: 500; }
+.login-form label small { color: var(--sage); font-size: 9px; font-weight: 300; }
+.login-form input { width: 100%; min-height: 56px; padding: 0 17px; color: var(--ink); background: var(--paper); border: 1px solid rgba(33,46,35,.2); border-radius: 10px; }
+.login-form .button { margin-top: 3px; justify-self: start; min-width: 240px; }
+.login-form .button:disabled { cursor: wait; opacity: .6; transform: none; }
+.login-privacy { color: var(--sage); font-size: 10px; line-height: 1.55; }
+.login-form > a, .login-confirmation > button { justify-self: start; padding: 0 0 6px; color: var(--bronze); background: transparent; border: 0; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 9px; letter-spacing: .12em; text-transform: uppercase; }
+.login-confirmation > span { width: 54px; height: 54px; display: grid; place-items: center; color: var(--paper); background: var(--bronze); border-radius: 50%; font-size: 20px; }
+.login-confirmation > p:first-of-type { margin-top: 25px; color: var(--bronze); font-size: 9px; letter-spacing: .23em; text-transform: uppercase; }
+.login-confirmation > p:last-of-type { max-width: 520px; color: var(--sage); font-size: 15px; line-height: 1.65; }
+.login-confirmation .button { margin: 28px 0 20px; }
+
 /* Client and admin apps */
 .client-app { min-height: 100vh; display: grid; grid-template-columns: 260px 1fr; background: #ebeae3; }
 .client-nav { position: sticky; top: 0; height: 100vh; padding: 30px 23px; display: flex; flex-direction: column; color: var(--paper); background: var(--ink); }
@@ -521,12 +548,29 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .client-nav nav { margin-top: 70px; display: grid; gap: 5px; }
 .client-nav nav button { padding: 13px 14px; text-align: left; cursor: pointer; color: rgba(246,244,235,.62); background: transparent; border: 0; border-radius: 8px; font-size: 11px; }
 .client-nav nav button.active { color: var(--paper); background: rgba(246,244,235,.09); }
+.client-nav > form { margin-top: auto; }
+.client-nav > form button { padding: 0 0 7px; color: rgba(246,244,235,.62); background: transparent; border: 0; border-bottom: 1px solid rgba(246,244,235,.18); cursor: pointer; font-size: 9px; letter-spacing: .12em; text-transform: uppercase; }
 .client-nav > a:last-child { margin-top: auto; color: var(--bronze); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; }
+.client-nav > form + a:last-child { margin-top: 22px; }
 .client-content { width: min(1100px,100%); padding: 55px 5vw 100px; }
 .client-content > header { display: flex; justify-content: space-between; align-items: center; }
 .client-content > header p { color: var(--bronze); font-size: 8px; letter-spacing: .23em; text-transform: uppercase; }
 .client-content > header h1 { margin-top: 7px; font-size: 47px; }
 .client-content > header > span { width: 43px; height: 43px; display: grid; place-items: center; color: var(--paper); background: var(--bronze); border-radius: 50%; font-size: 10px; }
+.account-ready-card { margin-top: 40px; padding: 34px; display: flex; justify-content: space-between; align-items: center; gap: 25px; color: var(--paper); background: var(--ink); }
+.account-ready-card span, .account-start-grid article > span { color: var(--bronze); font-size: 8px; letter-spacing: .2em; text-transform: uppercase; }
+.account-ready-card h2 { margin-top: 11px; font-size: 36px; }
+.account-ready-card p { margin-top: 8px; color: rgba(246,244,235,.62); font-size: 11px; }
+.account-ready-card i { width: 55px; height: 55px; display: grid; place-items: center; flex: 0 0 auto; color: var(--ink); background: var(--paper); border-radius: 50%; font-size: 20px; font-style: normal; }
+.account-start-grid { margin-top: 13px; display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
+.account-start-grid article { min-height: 220px; padding: 27px; background: var(--paper); border: 1px solid rgba(33,46,35,.08); }
+.account-start-grid h3 { margin-top: 35px; font-size: 28px; }
+.account-start-grid p { margin-top: 9px; color: var(--sage); font-size: 11px; line-height: 1.55; }
+.account-start-grid a { margin-top: 28px; padding-bottom: 6px; display: inline-block; color: var(--bronze); border-bottom: 1px solid var(--line); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+.client-empty { max-width: 700px; min-height: 330px; padding: 45px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; background: var(--paper); border: 1px solid rgba(33,46,35,.08); }
+.client-empty > span { color: var(--bronze); font-family: var(--display); font-size: 45px; line-height: 1; }
+.client-empty h3 { margin-top: 20px; font-size: 30px; }
+.client-empty p { max-width: 520px; margin: 9px 0 26px; color: var(--sage); font-size: 12px; line-height: 1.6; }
 .next-visit { margin-top: 40px; padding: 34px; display: grid; grid-template-columns: 1fr auto; gap: 25px; color: var(--paper); background: var(--ink); }
 .next-visit > div:first-child span, .repeat-grid article > span, .garden-card > span { color: var(--bronze); font-size: 8px; letter-spacing: .2em; text-transform: uppercase; }
 .next-visit h2 { margin-top: 12px; font-size: 38px; }
@@ -566,6 +610,8 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .profile-card { max-width: 650px; padding: 30px; background: var(--paper); }
 .profile-card label { margin-top: 18px; display: block; font-size: 10px; }
 .profile-card input { width: 100%; min-height: 50px; margin-top: 7px; padding: 0 13px; border: 1px solid rgba(33,46,35,.16); border-radius: 8px; }
+.profile-card input[readonly] { color: var(--ink); background: #efeee8; }
+.profile-card > p { margin-top: 24px; color: var(--sage); font-size: 10px; line-height: 1.55; }
 .profile-card button { color: var(--paper); background: var(--ink); }
 
 .admin-app { min-height: 100vh; display: grid; grid-template-columns: 230px 1fr; background: #ecebe4; }
@@ -609,13 +655,32 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
   .process-list aside { grid-column: 2; }
   .pricing-calc, .project-intro { position: static; }
   .project-page { gap: 60px; }
-  .client-app, .admin-app { grid-template-columns: 1fr; }
+  .login-page, .client-app, .admin-app { grid-template-columns: 1fr; }
+  .login-brand-panel { min-height: 330px; padding: 30px 6vw 45px; }
+  .login-brand-panel h2 { max-width: 650px; margin-top: 45px; font-size: 46px; }
+  .login-brand-panel ul { display: none; }
+  .login-card-wrap { padding: 65px 6vw 90px; }
   .client-nav { position: static; width: 100%; height: auto; padding: 18px; flex-direction: row; align-items: center; overflow-x: auto; }
   .client-nav img { width: 150px; }
   .client-nav nav { margin: 0 0 0 auto; display: flex; }
+  .client-nav > form { margin: 0 0 0 16px; }
+  .client-nav > form + a:last-child { display: none; }
   .client-nav > a:last-child { display: none; }
   .client-content { padding: 40px 5vw 80px; }
   .admin-app > aside { display: none; }
+}
+
+@media (max-width: 620px) {
+  .login-brand-panel { min-height: 260px; }
+  .login-brand-panel > a img { width: 180px; }
+  .login-brand-panel h2 { margin-top: 35px; font-size: 38px; }
+  .login-card-wrap { padding: 52px 20px 80px; }
+  .login-card > h1, .login-confirmation h1 { font-size: 47px; }
+  .login-form .button { width: 100%; }
+  .account-start-grid { grid-template-columns: 1fr; }
+  .account-ready-card { align-items: flex-start; padding: 27px; }
+  .account-ready-card h2 { font-size: 30px; }
+  .client-empty { padding: 30px; }
 }
 
 @media (max-width: 620px) {
