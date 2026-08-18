@@ -1,5 +1,5 @@
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/app/site-link";
 import { requireStaffPermission } from "@/modules/auth/server";
 
 export const dynamic = "force-dynamic";

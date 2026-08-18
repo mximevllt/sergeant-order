@@ -233,6 +233,10 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .task-card > i { position: absolute; top: 10px; right: 10px; width: 25px; height: 25px; display: grid; place-items: center; color: var(--bronze); background: var(--paper); border: 1px solid var(--line); border-radius: 50%; font-size: 11px; font-style: normal; }
 .unknown-link { margin-top: 22px; padding: 0 0 8px; color: var(--bronze); background: transparent; border: 0; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 10px; letter-spacing: .15em; text-transform: uppercase; }
 .unknown-link.selected { color: var(--ink); border-color: var(--bronze); }
+.catalog-loading, .pricing-error, .pricing-warning { margin: 16px 0; padding: 14px 16px; font-size: 10px; line-height: 1.55; }
+.catalog-loading { color: var(--sage); background: var(--paper); border-left: 3px solid var(--bronze); }
+.pricing-error { color: #6b2522; background: #f5e5e2; border-left: 3px solid #9b443e; }
+.pricing-warning { color: #66481f; background: #f5ebd8; border-left: 3px solid var(--bronze); }
 .unknown-panel { margin-top: 16px; padding: 28px; color: var(--paper); background: var(--ink); border-left: 3px solid var(--bronze); }
 .unknown-panel h2 { font-size: 27px; }
 .unknown-panel > p { max-width: 590px; margin: 7px 0 20px; color: rgba(246,244,235,.65); font-size: 10px; line-height: 1.6; }

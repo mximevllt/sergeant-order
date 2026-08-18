@@ -1,5 +1,5 @@
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/app/site-link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/modules/auth/server";
 import { safeReturnTo } from "@/modules/auth/security.mjs";

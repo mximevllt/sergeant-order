@@ -1,34 +1,28 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import Link from "@/app/site-link";
+import { useEffect, useRef, useState } from "react";
 
-const tasks = [
-  ["Tonte", "Tondre la pelouse", "Tonte, bordures et finition.", "/images/tonte.jpg"],
-  ["Taille de haies", "Tailler les haies", "Dessus, côtés et nettoyage.", "/images/haies.jpg"],
-  ["Débroussaillage", "Débroussailler", "Herbes hautes et végétation dense.", "/images/debroussaillage.jpg"],
-  ["Massifs", "Désherber les massifs", "Désherbage et entretien soigné.", "/images/massifs.jpg"],
-  ["Nettoyage", "Remettre au propre", "Ramassage, feuilles et finitions.", "/images/nettoyage.jpg"],
-  ["Entretien complet", "Entretenir tout le jardin", "Nous suivons vos priorités.", "/images/entretien.jpg"],
-];
+type CatalogTask = { code: string; label: string; description: string; measurementKind: string; eligibleSap: boolean; sortOrder: number };
+type TotalData = { intervention: number; taskFee: number; detailFee: number; accessFee: number; evacuation: number; reduction: number; total: number; afterTax: number };
+type PricingResponse = { recommendedHalfDays: number; warnings: string[]; totals: TotalData; pricingVersion: { version: number; label: string } };
+
+const taskPresentation: Record<string, { title: string; image: string }> = {
+  MOWING: { title: "Tondre la pelouse", image: "/images/tonte.jpg" },
+  HEDGE_TRIMMING: { title: "Tailler les haies", image: "/images/haies.jpg" },
+  BRUSH_CLEARING: { title: "Débroussailler", image: "/images/debroussaillage.jpg" },
+  FLOWER_BEDS: { title: "Désherber les massifs", image: "/images/massifs.jpg" },
+  GARDEN_CLEANING: { title: "Remettre au propre", image: "/images/nettoyage.jpg" },
+  COMPLETE_MAINTENANCE: { title: "Entretenir tout le jardin", image: "/images/entretien.jpg" },
+};
+
+const emptyTotals: TotalData = { intervention: 0, taskFee: 0, detailFee: 0, accessFee: 0, evacuation: 0, reduction: 0, total: 0, afterTax: 0 };
 
 const datesByMode: Record<string, string[]> = {
   soon: ["lun. 17", "mar. 18", "mer. 19", "jeu. 20", "ven. 21"],
   week: ["lun. 17", "mar. 18", "mer. 19", "jeu. 20", "ven. 21", "sam. 22"],
 };
-
-const surfaceHours: Record<string, number> = { "< 100 m²": .8, "100–250 m²": 1.3, "250–500 m²": 2.1, "500–1 000 m²": 3.6, "+ 1 000 m²": 5.2 };
-const hedgeFactor: Record<string, number> = { "< 1,5 m": .8, "1,5–2 m": 1, "2–2,5 m": 1.25, "2,5–3 m": 1.55, "+ 3 m": 2.1 };
-const otherTaskHours: Record<string, number> = { Débroussaillage: 2.4, Massifs: 1.6, Nettoyage: 1.4, "Entretien complet": 3.8 };
-
-function calculateWorkload(selected: string[], lawnSurface: string, hedgeHeight: string) {
-  let hours = 0;
-  if (selected.includes("Tonte")) hours += surfaceHours[lawnSurface] ?? 1.3;
-  if (selected.includes("Taille de haies")) hours += 2.4 * (hedgeFactor[hedgeHeight] ?? 1);
-  selected.forEach((task) => { hours += otherTaskHours[task] ?? 0; });
-  return Math.max(1, Math.ceil(hours / 4));
-}
 
 function durationLabel(blocks: number) {
   if (blocks === 1) return "1/2 journée";
@@ -44,7 +38,9 @@ function longDurationLabel(blocks: number) {
 export default function BookingPage() {
   const [step, setStep] = useState(1);
   const [address, setAddress] = useState("28 rue Jules Ferry, 83170 Brignoles");
-  const [selected, setSelected] = useState<string[]>(["Tonte", "Taille de haies"]);
+  const [tasks, setTasks] = useState<CatalogTask[]>([]);
+  const [catalogError, setCatalogError] = useState(false);
+  const [selected, setSelected] = useState<string[]>(["MOWING", "HEDGE_TRIMMING"]);
   const [unknownNeed, setUnknownNeed] = useState(false);
   const [lawnSurface, setLawnSurface] = useState("250–500 m²");
   const [grass, setGrass] = useState("Entretenue");
@@ -52,9 +48,9 @@ export default function BookingPage() {
   const [hedgeLength, setHedgeLength] = useState(18);
   const [hedgeHeight, setHedgeHeight] = useState("1,5–2 m");
   const [hedgeFaces, setHedgeFaces] = useState("3 faces");
-  const [duration, setDuration] = useState(() => calculateWorkload(["Tonte", "Taille de haies"], "250–500 m²", "1,5–2 m"));
+  const [duration, setDuration] = useState(2);
   const [waste, setWaste] = useState("emporter");
-  const [priority, setPriority] = useState<string[]>(["Tonte", "Taille de haies"]);
+  const [priority, setPriority] = useState<string[]>(["MOWING", "HEDGE_TRIMMING"]);
   const [scheduleMode, setScheduleMode] = useState("soon");
   const [date, setDate] = useState("jeu. 20");
   const [customDate, setCustomDate] = useState("");
@@ -67,35 +63,64 @@ export default function BookingPage() {
   const [passageWidth, setPassageWidth] = useState("> 1 m");
   const [animal, setAnimal] = useState(false);
   const [legal, setLegal] = useState(false);
+  const [totals, setTotals] = useState<TotalData>(emptyTotals);
+  const [recommended, setRecommended] = useState(2);
+  const [pricingWarnings, setPricingWarnings] = useState<string[]>([]);
+  const [pricingLabel, setPricingLabel] = useState("Chargement du barème…");
+  const [pricingError, setPricingError] = useState(false);
+  const lastRecommendationKey = useRef("");
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   }, [step]);
 
-  const workload = useMemo(
-    () => calculateWorkload(selected, lawnSurface, hedgeHeight),
-    [selected, lawnSurface, hedgeHeight],
-  );
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/catalog", { signal: controller.signal }).then(async (response) => {
+      if (!response.ok) throw new Error("CATALOG_UNAVAILABLE");
+      const catalog = await response.json() as { tasks: CatalogTask[]; pricing: { label: string } };
+      setTasks(catalog.tasks);
+      setPricingLabel(catalog.pricing.label);
+      const requested = new URLSearchParams(window.location.search).get("service") ?? "";
+      const aliases: Record<string, string> = { tonte: "MOWING", "Tonte & finitions": "MOWING", haies: "HEDGE_TRIMMING", "Taille de haies": "HEDGE_TRIMMING", debroussaillage: "BRUSH_CLEARING", "Débroussaillage": "BRUSH_CLEARING", massifs: "FLOWER_BEDS", "Désherbage & massifs": "FLOWER_BEDS", nettoyage: "GARDEN_CLEANING", "Nettoyage du jardin": "GARDEN_CLEANING", complet: "COMPLETE_MAINTENANCE", "Entretien complet": "COMPLETE_MAINTENANCE" };
+      const requestedCode = aliases[requested];
+      if (requestedCode && catalog.tasks.some(({ code }) => code === requestedCode)) { setSelected([requestedCode]); setPriority([requestedCode]); }
+      else setSelected((current) => current.filter((code) => catalog.tasks.some((task) => task.code === code)));
+    }).catch((error) => { if (error instanceof Error && error.name !== "AbortError") setCatalogError(true); });
+    return () => controller.abort();
+  }, []);
 
-  const totals = useMemo(() => {
-    const taskFee = Math.max(0, selected.length - 1) * 9;
-    const lawnFee = selected.includes("Tonte") ? (grass === "Haute" ? 20 : grass === "Très haute" ? 60 : 0) : 0;
-    const hedgeFee = selected.includes("Taille de haies")
-      ? Math.max(0, Math.round((hedgeLength - 5) * .75))
-        + ({ Dessus: 0, "1 côté": 3, "2 côtés": 6, "3 faces": 9 }[hedgeFaces] ?? 0)
-        + (hedgeHeight === "2–2,5 m" ? 9 : hedgeHeight === "2,5–3 m" ? 18 : hedgeHeight === "+ 3 m" ? 34 : 0)
-      : 0;
-    const detailFee = lawnFee + hedgeFee;
-    const accessFee = (access.includes("sans moi") ? 4 : 0)
-      + (access.includes("sans moi") ? ({ "Portail ouvert": 0, "Boîte à clés": 4, Code: 3, Autre: 6 }[accessType] ?? 0) : 0)
-      + (parking === "Non" ? 12 : 0)
-      + (distance === "20–50 m" ? 8 : distance === "> 50 m" ? 18 : 0);
-    const intervention = 219 * duration;
-    const evacuation = waste === "emporter" ? 28 : 0;
-    const reduction = flexible ? 10 : 0;
-    const total = intervention + taskFee + detailFee + accessFee + evacuation - reduction;
-    return { intervention, taskFee, detailFee, accessFee, evacuation, reduction, total, afterTax: Math.ceil(total / 2) };
-  }, [duration, selected, grass, hedgeLength, hedgeHeight, hedgeFaces, access, accessType, parking, distance, waste, flexible]);
+  const recommendationKey = JSON.stringify([selected, lawnSurface, grass, hedgeLength, hedgeHeight, hedgeFaces, waste, access, accessType, parking, distance, flexible]);
+  useEffect(() => {
+    if (!tasks.length) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      const body = {
+        taskCodes: selected, halfDays: duration,
+        lawnSurfaceBand: ({ "< 100 m²": "UNDER_100", "100–250 m²": "FROM_100_TO_250", "250–500 m²": "FROM_250_TO_500", "500–1 000 m²": "FROM_500_TO_1000", "+ 1 000 m²": "OVER_1000" } as Record<string, string>)[lawnSurface],
+        grassState: ({ Entretenue: "MAINTAINED", Haute: "HIGH", "Très haute": "VERY_HIGH" } as Record<string, string>)[grass],
+        hedgeLengthM: hedgeLength,
+        hedgeHeightBand: ({ "< 1,5 m": "UNDER_1_5M", "1,5–2 m": "FROM_1_5_TO_2M", "2–2,5 m": "FROM_2_TO_2_5M", "2,5–3 m": "FROM_2_5_TO_3M", "+ 3 m": "OVER_3M" } as Record<string, string>)[hedgeHeight],
+        hedgeFaces: ({ Dessus: "TOP", "1 côté": "ONE_SIDE", "2 côtés": "TWO_SIDES", "3 faces": "THREE_FACES" } as Record<string, string>)[hedgeFaces],
+        greenWaste: waste === "emporter" ? "REMOVE_1_TO_2M3" : "LEAVE_ON_SITE",
+        customerPresence: !access.includes("sans moi"),
+        accessType: ({ "Portail ouvert": "OPEN_GATE", "Boîte à clés": "KEY_BOX", Code: "CODE", Autre: "OTHER" } as Record<string, string>)[accessType],
+        nearbyParking: parking === "Oui",
+        vehicleDistanceBand: ({ "< 20 m": "UNDER_20M", "20–50 m": "FROM_20_TO_50M", "> 50 m": "OVER_50M" } as Record<string, string>)[distance],
+        flexibleOnDay: flexible,
+      };
+      fetch("/api/pricing/estimate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: controller.signal }).then(async (response) => {
+        if (!response.ok) throw new Error("PRICING_UNAVAILABLE");
+        const quote = await response.json() as PricingResponse;
+        setTotals(quote.totals); setRecommended(quote.recommendedHalfDays); setPricingWarnings(quote.warnings); setPricingLabel(quote.pricingVersion.label); setPricingError(false);
+        if (lastRecommendationKey.current !== recommendationKey) {
+          lastRecommendationKey.current = recommendationKey;
+          if (duration !== quote.recommendedHalfDays) setDuration(quote.recommendedHalfDays);
+        }
+      }).catch((error) => { if (error instanceof Error && error.name !== "AbortError") setPricingError(true); });
+    }, 180);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [tasks.length, recommendationKey, duration, selected, lawnSurface, grass, hedgeLength, hedgeHeight, hedgeFaces, waste, access, accessType, parking, distance, flexible]);
 
   const toggleTask = (name: string) => {
     setUnknownNeed(false);
@@ -106,16 +131,9 @@ export default function BookingPage() {
       const added = next.filter((task) => !kept.includes(task));
       return [...kept, ...added];
     });
-    setDuration(calculateWorkload(next, lawnSurface, hedgeHeight));
   };
-  const updateLawnSurface = (value: string) => {
-    setLawnSurface(value);
-    setDuration(calculateWorkload(selected, value, hedgeHeight));
-  };
-  const updateHedgeHeight = (value: string) => {
-    setHedgeHeight(value);
-    setDuration(calculateWorkload(selected, lawnSurface, value));
-  };
+  const updateLawnSurface = (value: string) => setLawnSurface(value);
+  const updateHedgeHeight = (value: string) => setHedgeHeight(value);
   const movePriority = (index: number, direction: number) => {
     const target = index + direction;
     if (target < 0 || target >= priority.length) return;
@@ -125,6 +143,8 @@ export default function BookingPage() {
   };
   const goNext = () => setStep((current) => Math.min(6, current + 1));
   const goBack = () => setStep((current) => Math.max(1, current - 1));
+  const taskLabel = (code: string) => tasks.find((task) => task.code === code)?.label ?? code;
+  const selectedLabels = selected.map(taskLabel);
 
   return (
     <main className="booking-page">
@@ -136,19 +156,21 @@ export default function BookingPage() {
 
       <div className="booking-layout">
         <section className="booking-main" key={step}>
-          {step === 1 && <StepNeeds selected={selected} toggleTask={toggleTask} unknownNeed={unknownNeed} setUnknownNeed={setUnknownNeed} />}
+          {step === 1 && <StepNeeds tasks={tasks} catalogError={catalogError} selected={selected} toggleTask={toggleTask} unknownNeed={unknownNeed} setUnknownNeed={setUnknownNeed} />}
           {step === 2 && <StepDetails selected={selected} lawnSurface={lawnSurface} setLawnSurface={updateLawnSurface} grass={grass} setGrass={setGrass} terrain={terrain} setTerrain={setTerrain} hedgeLength={hedgeLength} setHedgeLength={setHedgeLength} hedgeHeight={hedgeHeight} setHedgeHeight={updateHedgeHeight} hedgeFaces={hedgeFaces} setHedgeFaces={setHedgeFaces} />}
-          {step === 3 && <StepDuration duration={duration} setDuration={setDuration} recommended={workload} priority={priority} movePriority={movePriority} waste={waste} setWaste={setWaste} />}
+          {step === 3 && <StepDuration duration={duration} setDuration={setDuration} recommended={recommended} priority={priority} taskLabel={taskLabel} warnings={pricingWarnings} movePriority={movePriority} waste={waste} setWaste={setWaste} />}
           {step === 4 && <StepSchedule mode={scheduleMode} setMode={setScheduleMode} date={date} setDate={setDate} customDate={customDate} setCustomDate={setCustomDate} slot={slot} setSlot={setSlot} flexible={flexible} setFlexible={setFlexible} />}
           {step === 5 && <StepAccess access={access} setAccess={setAccess} accessType={accessType} setAccessType={setAccessType} parking={parking} setParking={setParking} distance={distance} setDistance={setDistance} passageWidth={passageWidth} setPassageWidth={setPassageWidth} animal={animal} setAnimal={setAnimal} />}
-          {step === 6 && <StepCheckout address={address} setAddress={setAddress} selected={selected} slot={slot} duration={duration} waste={waste} totals={totals} legal={legal} setLegal={setLegal} />}
+          {step === 6 && <StepCheckout address={address} setAddress={setAddress} selected={selectedLabels} slot={slot} duration={duration} waste={waste} totals={totals} legal={legal} setLegal={setLegal} />}
+
+          {pricingError && <p className="pricing-error" role="alert">Le tarif n’a pas pu être recalculé. Vérifiez votre connexion avant de continuer.</p>}
 
           <div className="booking-actions">
             {step === 1 ? <Link className="back-button" href="/">← Retour à l’accueil</Link> : <button className="back-button" onClick={goBack}>← Retour</button>}
             {step < 6 ? <button className="button button-primary" onClick={goNext}>Continuer <span>→</span></button> : <a className={`button button-primary final-book${legal ? "" : " disabled"}`} href={legal ? "/confirmation" : undefined} aria-disabled={!legal}>Réserver — {totals.total} € à payer après intervention</a>}
           </div>
         </section>
-        <Summary address={address} selected={selected} lawnSurface={lawnSurface} hedgeLength={hedgeLength} hedgeHeight={hedgeHeight} duration={duration} waste={waste} totals={totals} />
+        <Summary address={address} selected={selected} taskLabel={taskLabel} lawnSurface={lawnSurface} hedgeLength={hedgeLength} hedgeHeight={hedgeHeight} duration={duration} waste={waste} totals={totals} pricingLabel={pricingLabel} />
       </div>
       <div className="mobile-price-bar">
         {step === 1 ? <Link className="mobile-back" href="/" aria-label="Retour à l’accueil">←</Link> : <button className="mobile-back" onClick={goBack} aria-label="Étape précédente">←</button>}
@@ -171,14 +193,16 @@ function AddressFields({ address, setAddress }: { address: string; setAddress: (
   </>;
 }
 
-function StepNeeds({ selected, toggleTask, unknownNeed, setUnknownNeed }: { selected: string[]; toggleTask: (v: string) => void; unknownNeed: boolean; setUnknownNeed: (v: boolean) => void }) {
+function StepNeeds({ tasks, catalogError, selected, toggleTask, unknownNeed, setUnknownNeed }: { tasks: CatalogTask[]; catalogError: boolean; selected: string[]; toggleTask: (v: string) => void; unknownNeed: boolean; setUnknownNeed: (v: boolean) => void }) {
   const openUnknown = () => {
     setUnknownNeed(!unknownNeed);
     if (!unknownNeed) setTimeout(() => document.getElementById("unknown-description")?.focus(), 50);
   };
   return <>
     <Intro eyebrow="Votre besoin" title="Que souhaitez-vous faire ?" copy="Vous pouvez sélectionner plusieurs tâches pour la même intervention." />
-    <div className="task-grid">{tasks.map(([name, title, desc, image]) => <button type="button" key={name} className={selected.includes(name) ? "task-card selected" : "task-card"} onClick={() => toggleTask(name)} aria-pressed={selected.includes(name)}><Image src={image} alt="" width={1000} height={668} sizes="(max-width: 600px) 110px, 150px" /><div><small>{name}</small><strong>{title}</strong><span>{desc}</span></div><i>{selected.includes(name) ? "✓" : "+"}</i></button>)}</div>
+    {catalogError && <p className="pricing-error" role="alert">Le catalogue des prestations est momentanément indisponible.</p>}
+    {!tasks.length && !catalogError && <p className="catalog-loading" role="status">Chargement des prestations disponibles…</p>}
+    <div className="task-grid">{tasks.map((task) => { const presentation = taskPresentation[task.code] ?? { title: task.label, image: "/images/entretien.jpg" }; return <button type="button" key={task.code} className={selected.includes(task.code) ? "task-card selected" : "task-card"} onClick={() => toggleTask(task.code)} aria-pressed={selected.includes(task.code)}><Image src={presentation.image} alt="" width={1000} height={668} sizes="(max-width: 600px) 110px, 150px" /><div><small>{task.label}</small><strong>{presentation.title}</strong><span>{task.description}</span></div><i>{selected.includes(task.code) ? "✓" : "+"}</i></button>; })}</div>
     <button type="button" className={`unknown-link${unknownNeed ? " selected" : ""}`} onClick={openUnknown} aria-expanded={unknownNeed}>Je ne sais pas exactement ce qu’il faut {unknownNeed ? "↑" : "→"}</button>
     {unknownNeed && <div className="unknown-panel"><h2>Montrez-nous simplement le jardin.</h2><p>Décrivez ce que vous observez et ajoutez quelques photos. L’équipe préparera la mission à partir de ces éléments.</p><label htmlFor="unknown-description">Ce qu’il faudrait améliorer<textarea id="unknown-description" placeholder="Exemple : le jardin n’a pas été entretenu depuis plusieurs mois, je souhaite surtout qu’il soit remis au propre…" /></label><label className="unknown-upload"><input type="file" multiple accept="image/*" />+ Ajouter des photos</label></div>}
   </>;
@@ -188,8 +212,8 @@ type DetailsProps = { selected: string[]; lawnSurface: string; setLawnSurface: (
 function StepDetails({ selected, lawnSurface, setLawnSurface, grass, setGrass, terrain, setTerrain, hedgeLength, setHedgeLength, hedgeHeight, setHedgeHeight, hedgeFaces, setHedgeFaces }: DetailsProps) {
   return <>
     <Intro eyebrow="Les détails" title="Aidez-nous à prévoir juste." copy="Ces informations affinent la durée recommandée, le matériel nécessaire et le prix." />
-    {selected.includes("Tonte") && <div className="detail-card"><h2>Pelouse</h2><Choice label="Quelle surface à entretenir environ ?" values={["< 100 m²", "100–250 m²", "250–500 m²", "500–1 000 m²", "+ 1 000 m²"]} value={lawnSurface} setValue={setLawnSurface} /><Choice label="État actuel" values={["Entretenue", "Haute", "Très haute"]} value={grass} setValue={setGrass} visual /><Choice label="Inclinaison du terrain" values={["Plat", "Légèrement en pente", "Forte pente"]} value={terrain} setValue={setTerrain} /></div>}
-    {selected.includes("Taille de haies") && <div className="detail-card"><h2>Haies</h2><div className="counter-field"><span>Longueur totale</span><div><button type="button" onClick={() => setHedgeLength(Math.max(1, hedgeLength - 1))}>−</button><strong>{hedgeLength} m</strong><button type="button" onClick={() => setHedgeLength(hedgeLength + 1)}>+</button></div></div><Choice label="Hauteur" values={["< 1,5 m", "1,5–2 m", "2–2,5 m", "2,5–3 m", "+ 3 m"]} value={hedgeHeight} setValue={setHedgeHeight} /><Choice label="Que faut-il tailler ?" values={["Dessus", "1 côté", "2 côtés", "3 faces"]} value={hedgeFaces} setValue={setHedgeFaces} /></div>}
+    {selected.includes("MOWING") && <div className="detail-card"><h2>Pelouse</h2><Choice label="Quelle surface à entretenir environ ?" values={["< 100 m²", "100–250 m²", "250–500 m²", "500–1 000 m²", "+ 1 000 m²"]} value={lawnSurface} setValue={setLawnSurface} /><Choice label="État actuel" values={["Entretenue", "Haute", "Très haute"]} value={grass} setValue={setGrass} visual /><Choice label="Inclinaison du terrain" values={["Plat", "Légèrement en pente", "Forte pente"]} value={terrain} setValue={setTerrain} /></div>}
+    {selected.includes("HEDGE_TRIMMING") && <div className="detail-card"><h2>Haies</h2><div className="counter-field"><span>Longueur totale</span><div><button type="button" onClick={() => setHedgeLength(Math.max(1, hedgeLength - 1))}>−</button><strong>{hedgeLength} m</strong><button type="button" onClick={() => setHedgeLength(hedgeLength + 1)}>+</button></div></div><Choice label="Hauteur" values={["< 1,5 m", "1,5–2 m", "2–2,5 m", "2,5–3 m", "+ 3 m"]} value={hedgeHeight} setValue={setHedgeHeight} /><Choice label="Que faut-il tailler ?" values={["Dessus", "1 côté", "2 côtés", "3 faces"]} value={hedgeFaces} setValue={setHedgeFaces} /></div>}
     <div className="upload-card"><span>Photos</span><h2>Quelques photos peuvent nous éviter de vous appeler.</h2><label><input type="file" multiple accept="image/*" />+ Ajouter des photos</label><p>Prenez une vue d’ensemble et, si besoin, une photo rapprochée. Maximum 8 photos. Évitez si possible d’inclure des personnes.</p></div>
   </>;
 }
@@ -198,16 +222,17 @@ function Choice({ label, values, value, setValue, visual = false }: { label: str
   return <fieldset className="choice-field"><legend>{label}</legend><div className={visual ? "choice-row visual" : "choice-row"}>{values.map((item) => <button type="button" key={item} className={value === item ? "selected" : ""} onClick={() => setValue(item)}>{visual && <i className={`grass-${item.toLowerCase().replaceAll(" ", "-")}`} />}{item}{item === "Entretenue" && <small>Herbe &lt; 15 cm</small>}</button>)}</div></fieldset>;
 }
 
-function StepDuration({ duration, setDuration, recommended, priority, movePriority, waste, setWaste }: { duration: number; setDuration: (v: number) => void; recommended: number; priority: string[]; movePriority: (i: number, d: number) => void; waste: string; setWaste: (v: string) => void }) {
+function StepDuration({ duration, setDuration, recommended, priority, taskLabel, warnings, movePriority, waste, setWaste }: { duration: number; setDuration: (v: number) => void; recommended: number; priority: string[]; taskLabel: (code: string) => string; warnings: string[]; movePriority: (i: number, d: number) => void; waste: string; setWaste: (v: string) => void }) {
   const [showMore, setShowMore] = useState(duration > 4 || recommended > 4);
   const fixed = [[1, "1/2 journée", "4 h"], [2, "1 journée", "8 h"], [3, "1,5 jour", "12 h"], [4, "2 jours", "16 h"]] as const;
   const customSelected = duration > 4;
   return <>
     <Intro eyebrow="Notre estimation" title="Combien de temps réserver ?" copy="Le site recommande la durée la plus adaptée aux informations renseignées." />
     <div className="recommendation"><span>Recommandation mise à jour</span><strong>{longDurationLabel(recommended)}</strong><p>Environ {recommended * 4} h d’intervention · Calculé selon vos réponses</p><i>✓</i></div>
+    {warnings.map((warning) => <p className="pricing-warning" key={warning}>{warning}</p>)}
     <div className="duration-grid">{fixed.map(([value, label, hours]) => <button type="button" key={value} className={duration === value ? "selected" : ""} onClick={() => setDuration(value)}><strong>{label}</strong><span>{hours}</span>{value === recommended && <b>Recommandé</b>}</button>)}<button type="button" className={`duration-more${customSelected ? " selected" : ""}`} onClick={() => { setShowMore(true); if (duration <= 4) setDuration(Math.max(5, recommended)); }} aria-expanded={showMore}><strong>+</strong><span>Plus de jours</span>{recommended > 4 && <b>Recommandé</b>}</button></div>
     {showMore && <div className="custom-duration"><label htmlFor="custom-duration">Durée en jours</label><div><button type="button" onClick={() => setDuration(Math.max(5, duration - 1))} aria-label="Retirer une demi-journée">−</button><input id="custom-duration" type="number" min="2.5" step="0.5" value={Math.max(2.5, duration / 2)} onChange={(e) => setDuration(Math.max(5, Math.round(Number(e.target.value) * 2)))} /><span>jours</span><button type="button" onClick={() => setDuration(Math.max(5, duration + 1))} aria-label="Ajouter une demi-journée">+</button></div><small>Les flèches ajustent la durée par pas de 0,5 jour.</small></div>}
-    <div className="priority-card"><h2>Si nous devons choisir, que faut-il faire en premier ?</h2>{priority.map((item, index) => <div key={item}><span>{index + 1}</span><strong>{item}</strong><button type="button" onClick={() => movePriority(index, -1)} aria-label={`Remonter ${item}`}>↑</button><button type="button" onClick={() => movePriority(index, 1)} aria-label={`Descendre ${item}`}>↓</button></div>)}</div>
+    <div className="priority-card"><h2>Si nous devons choisir, que faut-il faire en premier ?</h2>{priority.map((item, index) => <div key={item}><span>{index + 1}</span><strong>{taskLabel(item)}</strong><button type="button" onClick={() => movePriority(index, -1)} aria-label={`Remonter ${taskLabel(item)}`}>↑</button><button type="button" onClick={() => movePriority(index, 1)} aria-label={`Descendre ${taskLabel(item)}`}>↓</button></div>)}</div>
     <div className="waste-card"><h2>Que faisons-nous des déchets verts ?</h2><div><button type="button" className={waste === "laisser" ? "selected" : ""} onClick={() => setWaste("laisser")}><strong>Les laisser sur place</strong><span>Regroupés proprement à l’endroit de votre choix.</span></button><button type="button" className={waste === "emporter" ? "selected" : ""} onClick={() => setWaste("emporter")}><strong>Les emporter</strong><span>Chargement et évacuation · environ 1–2 m³.</span></button></div></div>
   </>;
 }
@@ -252,8 +277,7 @@ function StepCheckout({ address, setAddress, selected, slot, duration, waste, to
   </>;
 }
 
-type TotalData = { intervention: number; taskFee: number; detailFee: number; accessFee: number; evacuation: number; reduction: number; total: number; afterTax: number };
-function Summary({ address, selected, lawnSurface, hedgeLength, hedgeHeight, duration, waste, totals }: { address: string; selected: string[]; lawnSurface: string; hedgeLength: number; hedgeHeight: string; duration: number; waste: string; totals: TotalData }) {
+function Summary({ address, selected, taskLabel, lawnSurface, hedgeLength, hedgeHeight, duration, waste, totals, pricingLabel }: { address: string; selected: string[]; taskLabel: (code: string) => string; lawnSurface: string; hedgeLength: number; hedgeHeight: string; duration: number; waste: string; totals: TotalData; pricingLabel: string }) {
   const adjustments = totals.taskFee + totals.detailFee + totals.accessFee;
-  return <aside className="booking-summary"><p className="summary-kicker">Votre intervention</p><h2>Brignoles</h2><small>{address}</small><div className="summary-lines">{selected.map((item) => <div key={item}><span>{item}</span><strong>{item === "Tonte" ? lawnSurface : item === "Taille de haies" ? `${hedgeLength} m · ${hedgeHeight}` : "Sélectionné"}</strong></div>)}<div><span>Durée</span><strong>{longDurationLabel(duration)}</strong></div><div><span>Déchets</span><strong>{waste === "emporter" ? "Évacuation" : "Laissés sur place"}</strong></div></div><div className="price-lines"><div><span>Intervention</span><strong>{totals.intervention} €</strong></div>{adjustments > 0 && <div><span>Ajustements</span><strong>{adjustments} €</strong></div>}{totals.evacuation > 0 && <div><span>Évacuation</span><strong>{totals.evacuation} €</strong></div>}{totals.reduction > 0 && <div><span>Flexibilité</span><strong>−{totals.reduction} €</strong></div>}<div><span>Déplacement</span><strong>Inclus</strong></div></div><div className="summary-total"><span>Total TTC</span><strong>{totals.total} €</strong><p>≈ {totals.afterTax} € après crédit d’impôt*</p></div><button type="button">Voir le détail du prix</button><p className="summary-footnote">Prix ferme pour la durée réservée. Aucun supplément sans votre accord.</p></aside>;
+  return <aside className="booking-summary"><p className="summary-kicker">Votre intervention</p><h2>Brignoles</h2><small>{address}</small><div className="summary-lines">{selected.map((item) => <div key={item}><span>{taskLabel(item)}</span><strong>{item === "MOWING" ? lawnSurface : item === "HEDGE_TRIMMING" ? `${hedgeLength} m · ${hedgeHeight}` : "Sélectionné"}</strong></div>)}<div><span>Durée</span><strong>{longDurationLabel(duration)}</strong></div><div><span>Déchets</span><strong>{waste === "emporter" ? "Évacuation" : "Laissés sur place"}</strong></div></div><div className="price-lines"><div><span>Intervention</span><strong>{totals.intervention} €</strong></div>{adjustments > 0 && <div><span>Ajustements</span><strong>{adjustments} €</strong></div>}{totals.evacuation > 0 && <div><span>Évacuation</span><strong>{totals.evacuation} €</strong></div>}{totals.reduction > 0 && <div><span>Flexibilité</span><strong>−{totals.reduction} €</strong></div>}<div><span>Déplacement</span><strong>Inclus</strong></div></div><div className="summary-total"><span>Total TTC</span><strong>{totals.total} €</strong><p>≈ {totals.afterTax} € après crédit d’impôt*</p></div><button type="button">Voir le détail du prix</button><p className="summary-footnote">Prix ferme selon {pricingLabel}. Aucun supplément sans votre accord.</p></aside>;
 }

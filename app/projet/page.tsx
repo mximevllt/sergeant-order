@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/app/site-link";
 import { useState } from "react";
 import { Footer, Header, SectionLabel } from "../components";
 

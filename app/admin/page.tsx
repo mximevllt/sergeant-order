@@ -1,5 +1,5 @@
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/app/site-link";
 import { hasPermission, type Permission } from "@/modules/authorization/policy.mjs";
 import { requireStaffPermission } from "@/modules/auth/server";
 

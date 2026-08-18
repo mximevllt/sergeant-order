@@ -1,5 +1,5 @@
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/app/site-link";
 import { Footer, Header, SectionLabel } from "../../components";
 
 export default function HedgePage() {

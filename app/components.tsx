@@ -1,5 +1,5 @@
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/app/site-link";
 
 type SectionLabelProps = { number: string; children: React.ReactNode; light?: boolean };
 

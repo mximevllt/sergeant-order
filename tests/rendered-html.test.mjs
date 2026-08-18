@@ -105,6 +105,71 @@ test("server-renders the current product routes", async () => {
   assert.match(protectedField.headers.get("location") ?? "", /^\/connexion-entreprise\?returnTo=/u);
 });
 
+test("charge le catalogue actif et calcule le tarif uniquement côté serveur", async () => {
+  const database = await createMigratedDatabase();
+  const binding = createD1Binding(database);
+  const catalogResponse = await render("/api/catalog", { accept: "application/json", bindings: { DB: binding } });
+  assert.equal(catalogResponse.status, 200);
+  const catalog = await catalogResponse.json();
+  assert.equal(catalog.tasks.length, 6);
+  assert.equal(catalog.tasks[0].code, "MOWING");
+  assert.equal(catalog.pricing.version, 1);
+  assert.equal(catalog.pricing.halfDayTtcCents, 32900);
+
+  const baseInput = {
+    taskCodes: ["MOWING", "HEDGE_TRIMMING"],
+    halfDays: 2,
+    lawnSurfaceBand: "FROM_250_TO_500",
+    grassState: "MAINTAINED",
+    hedgeLengthM: 18,
+    hedgeHeightBand: "FROM_1_5_TO_2M",
+    hedgeFaces: "THREE_FACES",
+    greenWaste: "REMOVE_1_TO_2M3",
+    customerPresence: true,
+    accessType: "CODE",
+    nearbyParking: true,
+    vehicleDistanceBand: "UNDER_20M",
+    flexibleOnDay: false,
+  };
+  const estimate = async (input, origin = "http://localhost") => render("/api/pricing/estimate", {
+    accept: "application/json",
+    method: "POST",
+    headers: { Origin: origin, "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+    bindings: { DB: binding },
+  });
+  const priceResponse = await estimate(baseInput);
+  assert.equal(priceResponse.status, 200);
+  const price = await priceResponse.json();
+  assert.equal(price.pricingVersion.version, 1);
+  assert.equal(price.recommendedHalfDays, 2);
+  assert.deepEqual(price.totals, {
+    intervention: 658,
+    taskFee: 9,
+    detailFee: 22,
+    accessFee: 0,
+    evacuation: 28,
+    reduction: 0,
+    total: 717,
+    afterTax: 358.5,
+  });
+
+  const high = await (await estimate({ ...baseInput, grassState: "HIGH" })).json();
+  const veryHigh = await (await estimate({ ...baseInput, grassState: "VERY_HIGH" })).json();
+  assert.equal(high.totals.total - price.totals.total, 20);
+  assert.equal(veryHigh.totals.total - high.totals.total, 40);
+  const difficultAccess = await (await estimate({ ...baseInput, customerPresence: false, nearbyParking: false, vehicleDistanceBand: "OVER_50M", flexibleOnDay: true })).json();
+  assert.equal(difficultAccess.totals.accessFee, 37);
+  assert.equal(difficultAccess.totals.reduction, 10);
+  const highHedge = await (await estimate({ ...baseInput, hedgeHeightBand: "OVER_3M" })).json();
+  assert.equal(highHedge.lines.find((line) => line.code === "HEDGE_HEIGHT").amountTtcCents, 2500);
+  assert.match(highHedge.warnings.join(" "), /vérification de sécurité/u);
+
+  assert.equal((await estimate(baseInput, "https://malveillant.example")).status, 403);
+  assert.equal((await estimate({ ...baseInput, taskCodes: ["UNKNOWN_TASK"] })).status, 400);
+  database.close();
+});
+
 test("crée un compte par lien, ouvre une session, interdit la réutilisation et déconnecte", async () => {
   const database = await createMigratedDatabase();
   const binding = createD1Binding(database);

@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/app/site-link";
 import { useState, type FormEvent } from "react";
 import type { CustomerProfile, Garden, TerrainSlope } from "@/modules/customer/service";
 

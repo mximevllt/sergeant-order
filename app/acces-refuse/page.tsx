@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/app/site-link";
 
 export default async function AccessDeniedPage({ searchParams }: { searchParams: Promise<{ espace?: string }> }) {
   const { espace } = await searchParams;
