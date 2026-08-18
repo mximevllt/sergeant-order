@@ -1,3 +1,5 @@
+import Image from "next/image";
+import Link from "next/link";
 import { Footer, Header, SectionLabel } from "../components";
 
 const services = [
@@ -10,5 +12,5 @@ const services = [
 ];
 
 export default function ServicesPage() {
-  return <main><Header /><section className="inner-hero"><SectionLabel number="Services">Entretien à domicile</SectionLabel><h1>Qu’est-ce qu’on fait <em>dans le jardin ?</em></h1><p>Six prestations réservables directement en ligne. Vous pouvez les combiner librement dans la même intervention.</p></section><section className="section inner-service-grid">{services.map(([name,desc,image,href],i) => <a href={href} className="inner-service-card" key={name}><figure><img src={image} alt="" /><span>0{i+1}</span></figure><div><h2>{name}</h2><p>{desc}</p><b>Voir le service →</b></div></a>)}</section><section className="combo-band"><div><span>Tonte</span><b>✓</b></div><i>+</i><div><span>Haies</span><b>✓</b></div><i>+</i><div><span>Massifs</span><b>✓</b></div><strong>→ 1 demi-journée</strong><a className="button button-light" href="/reserver">Composer mon intervention</a></section><Footer /></main>;
+  return <main><Header /><section className="inner-hero"><SectionLabel number="Services">Entretien à domicile</SectionLabel><h1>Qu’est-ce qu’on fait <em>dans le jardin ?</em></h1><p>Six prestations réservables directement en ligne. Vous pouvez les combiner librement dans la même intervention.</p></section><section className="section inner-service-grid">{services.map(([name,desc,image,href],i) => <Link href={href} className="inner-service-card" key={name}><figure><Image src={image} alt="" width={1000} height={668} sizes="(max-width: 620px) 88vw, 42vw" /><span>0{i+1}</span></figure><div><h2>{name}</h2><p>{desc}</p><b>Voir le service →</b></div></Link>)}</section><section className="combo-band"><div><span>Tonte</span><b>✓</b></div><i>+</i><div><span>Haies</span><b>✓</b></div><i>+</i><div><span>Massifs</span><b>✓</b></div><strong>→ 1 demi-journée</strong><Link className="button button-light" href="/reserver">Composer mon intervention</Link></section><Footer /></main>;
 }

@@ -184,7 +184,7 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .footer-top small { display: block; margin-bottom: 10px; color: var(--bronze); font-size: 8px; letter-spacing: .22em; text-transform: uppercase; }
 .footer-top strong { font-family: var(--display); font-size: 20px; font-weight: 500; line-height: 1.45; }
 .footer-links { margin-top: 45px; padding-top: 22px; display: flex; flex-wrap: wrap; gap: 12px 25px; border-top: 1px solid rgba(246,244,235,.13); color: rgba(246,244,235,.55); font-size: 8px; letter-spacing: .14em; text-transform: uppercase; }
-.footer-links span { margin-right: auto; }
+.footer-links > span:first-child { margin-right: auto; }
 .footer-links a:hover { color: var(--paper); }
 
 /* Booking tunnel */
@@ -572,8 +572,8 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .admin-app > aside { padding: 25px 18px; color: var(--paper); background: var(--ink); }
 .admin-app > aside img { width: 185px; height: auto; }
 .admin-app > aside nav { margin-top: 45px; display: grid; gap: 3px; }
-.admin-app > aside nav a { padding: 10px 12px; color: rgba(246,244,235,.55); border-radius: 7px; font-size: 10px; }
-.admin-app > aside nav a.active { color: var(--paper); background: rgba(246,244,235,.09); }
+.admin-app > aside nav button { padding: 10px 12px; text-align: left; cursor: pointer; color: rgba(246,244,235,.55); background: transparent; border: 0; border-radius: 7px; font-size: 10px; }
+.admin-app > aside nav button.active { color: var(--paper); background: rgba(246,244,235,.09); }
 .admin-app > section { padding: 40px 4vw 80px; }
 .admin-app > section > header { display: flex; justify-content: space-between; align-items: center; }
 .admin-app header p { color: var(--bronze); font-size: 8px; letter-spacing: .2em; text-transform: uppercase; }

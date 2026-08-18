@@ -2,24 +2,23 @@ import assert from "node:assert/strict";
 import { access, readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 
-const developmentPreviewMeta =
-  /<meta(?=[^>]*\bname=["']codex-preview["'])(?=[^>]*\bcontent=["']development["'])[^>]*>/i;
-const templateRoot = new URL("../", import.meta.url);
-const previewRoot = new URL("../app/_sites-preview/", import.meta.url);
+const projectRoot = new URL("../", import.meta.url);
+const appRoot = new URL("../app/", import.meta.url);
+const workerUrl = new URL("../dist/server/index.js", import.meta.url);
+workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
+const workerPromise = import(workerUrl.href).then(({ default: worker }) => worker);
 
-async function render() {
-  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
-  const { default: worker } = await import(workerUrl.href);
-
+async function render(pathname, options = {}) {
+  const worker = await workerPromise;
   return worker.fetch(
-    new Request("http://localhost/", {
-      headers: { accept: "text/html" },
+    new Request(new URL(pathname, options.origin ?? "http://localhost"), {
+      headers: { accept: options.accept ?? "text/html" },
     }),
     {
       ASSETS: {
         fetch: async () => new Response("Not found", { status: 404 }),
       },
+      ...options.bindings,
     },
     {
       waitUntil() {},
@@ -28,64 +27,88 @@ async function render() {
   );
 }
 
-test("server-renders the starter loading skeleton", async () => {
-  const response = await render();
-  assert.equal(response.status, 200);
-  assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
+async function readAppSources(directory = appRoot) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const sources = [];
 
-  const html = await response.text();
-  assert.match(html, developmentPreviewMeta);
-  assert.match(html, /<title>Your site is taking shape<\/title>/i);
-  assert.match(html, /Building your site/);
-  assert.match(html, /Your site is taking shape/);
-  assert.match(
-    html,
-    /Your first version will appear here automatically when it’s ready\./,
-  );
-  assert.doesNotMatch(html, /Codex/);
-  assert.match(html, /react-loading-skeleton/);
-  assert.match(html, /role="status"/);
+  for (const entry of entries) {
+    const url = new URL(`${entry.name}${entry.isDirectory() ? "/" : ""}`, directory);
+    if (entry.isDirectory()) {
+      sources.push(...await readAppSources(url));
+    } else if (entry.name.endsWith(".tsx")) {
+      sources.push([url.pathname, await readFile(url, "utf8")]);
+    }
+  }
+
+  return sources;
+}
+
+test("reports environment health without exposing configuration values", async () => {
+  const localResponse = await render("/api/health", { accept: "application/json" });
+  assert.equal(localResponse.status, 200);
+  assert.deepEqual(await localResponse.json(), {
+    status: "ok",
+    environment: "development",
+    configuration: "ok",
+  });
+
+  const remoteResponse = await render("/api/health", {
+    origin: "https://production.sergeant-paysage.fr",
+    accept: "application/json",
+  });
+  assert.equal(remoteResponse.status, 503);
+  assert.deepEqual(await remoteResponse.json(), {
+    status: "misconfigured",
+    environment: "development",
+    configuration: "error",
+  });
 });
 
-test("keeps the loading skeleton scoped and disposable", async () => {
-  const [preview, css, page, layout, packageJson, files] = await Promise.all([
-    readFile(new URL("SkeletonPreview.tsx", previewRoot), "utf8"),
-    readFile(new URL("preview.css", previewRoot), "utf8"),
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+test("server-renders the current product routes", async () => {
+  const routes = [
+    ["/", /Votre jardin entretenu/, /Les services/],
+    ["/reserver", /Étape/, /Que souhaitez-vous faire/],
+    ["/espace-client", /Bonjour Maxime/, /Mes interventions/],
+    ["/admin", /Planning/, /Nouvelle intervention/],
+    ["/tarifs", /Des prix simples/, /Votre estimation/],
+  ];
+
+  for (const [pathname, firstExpected, secondExpected] of routes) {
+    const response = await render(pathname);
+    assert.equal(response.status, 200, `${pathname} should respond successfully`);
+    assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
+
+    const html = await response.text();
+    assert.match(html, firstExpected);
+    assert.match(html, secondExpected);
+    assert.doesNotMatch(html, /Your site is taking shape|Building your site|codex-preview/i);
+  }
+});
+
+test("ships Sergeant Paysage metadata and social preview", async () => {
+  const [response, layout] = await Promise.all([
+    render("/"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../package.json", import.meta.url), "utf8"),
-    readdir(previewRoot),
+    access(new URL("../public/og.png", import.meta.url)),
   ]);
 
-  assert.deepEqual(files.sort(), ["SkeletonPreview.tsx", "preview.css"]);
-  assert.match(preview, /from "react-loading-skeleton"/);
-  assert.match(preview, /baseColor="#eceae7"/);
-  assert.match(preview, /highlightColor="#f9f8f6"/);
-  assert.match(preview, /duration=\{2\.8\}/);
-  assert.match(preview, /sites-skeleton-search-placeholder/);
-  assert.match(packageJson, /"react-loading-skeleton": "3\.5\.0"/);
+  const html = await response.text();
+  assert.match(html, /<html[^>]*lang="fr"/i);
+  assert.match(html, /<title>Sergeant Paysage — Réservez votre jardinier en ligne<\/title>/i);
+  assert.match(html, /og\.png/i);
+  assert.match(layout, /Sergeant Paysage — Réservez votre jardinier en ligne/);
+  assert.doesNotMatch(layout, /Starter Project|codex-preview|_sites-preview/);
+});
 
-  const shellIndex = preview.indexOf('className="sites-skeleton-shell"');
-  const statusIndex = preview.indexOf('className="sites-skeleton-status"');
-  assert.ok(shellIndex >= 0 && statusIndex > shellIndex);
-  assert.match(css, /position:\s*fixed/);
-  assert.match(css, /inset:\s*0/);
-  assert.match(css, /opacity:\s*0\.52/);
-  assert.match(css, /prefers-reduced-motion:\s*reduce/);
-  assert.doesNotMatch(css, /#020617|canvas|pets|progress/i);
-  assert.doesNotMatch(
-    preview,
-    /loading-spinner|status-mark|status-progress|canvas|cookie|random/i,
-  );
+test("keeps application sources free of starter and dead-link remnants", async () => {
+  const sources = await readAppSources();
 
-  assert.match(page, /export const metadata:\s*Metadata/);
-  assert.match(page, /"codex-preview": "development"/);
-  assert.match(page, /<SkeletonPreview \/>/);
-  assert.match(layout, /title:\s*"Starter Project"/);
-  assert.doesNotMatch(layout, /codex-preview|_sites-preview|themeColor|\bViewport\b/);
-  assert.doesNotMatch(css, /(^|\s)(html|body)\s*\{/m);
+  for (const [pathname, source] of sources) {
+    assert.doesNotMatch(source, /<img\b/, `${pathname} should use the image component`);
+    assert.doesNotMatch(source, /href=["']#["']/, `${pathname} should not contain dead links`);
+    assert.doesNotMatch(source, /SkeletonPreview|codex-preview/, `${pathname} should not contain starter code`);
+  }
 
-  await assert.rejects(
-    access(new URL("public/_sites-preview", templateRoot)),
-  );
+  await assert.rejects(access(new URL("../app/_sites-preview/", import.meta.url)));
+  await assert.rejects(access(new URL("../public/_sites-preview/", projectRoot)));
 });

@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 const tasks = [
@@ -19,6 +21,14 @@ const datesByMode: Record<string, string[]> = {
 const surfaceHours: Record<string, number> = { "< 100 m²": .8, "100–250 m²": 1.3, "250–500 m²": 2.1, "500–1 000 m²": 3.6, "+ 1 000 m²": 5.2 };
 const hedgeFactor: Record<string, number> = { "< 1,5 m": .8, "1,5–2 m": 1, "2–2,5 m": 1.25, "2,5–3 m": 1.55, "+ 3 m": 2.1 };
 const otherTaskHours: Record<string, number> = { Débroussaillage: 2.4, Massifs: 1.6, Nettoyage: 1.4, "Entretien complet": 3.8 };
+
+function calculateWorkload(selected: string[], lawnSurface: string, hedgeHeight: string) {
+  let hours = 0;
+  if (selected.includes("Tonte")) hours += surfaceHours[lawnSurface] ?? 1.3;
+  if (selected.includes("Taille de haies")) hours += 2.4 * (hedgeFactor[hedgeHeight] ?? 1);
+  selected.forEach((task) => { hours += otherTaskHours[task] ?? 0; });
+  return Math.max(1, Math.ceil(hours / 4));
+}
 
 function durationLabel(blocks: number) {
   if (blocks === 1) return "1/2 journée";
@@ -42,7 +52,7 @@ export default function BookingPage() {
   const [hedgeLength, setHedgeLength] = useState(18);
   const [hedgeHeight, setHedgeHeight] = useState("1,5–2 m");
   const [hedgeFaces, setHedgeFaces] = useState("3 faces");
-  const [duration, setDuration] = useState(1);
+  const [duration, setDuration] = useState(() => calculateWorkload(["Tonte", "Taille de haies"], "250–500 m²", "1,5–2 m"));
   const [waste, setWaste] = useState("emporter");
   const [priority, setPriority] = useState<string[]>(["Tonte", "Taille de haies"]);
   const [scheduleMode, setScheduleMode] = useState("soon");
@@ -62,23 +72,10 @@ export default function BookingPage() {
     window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   }, [step]);
 
-  useEffect(() => {
-    setPriority((current) => {
-      const kept = current.filter((task) => selected.includes(task));
-      const added = selected.filter((task) => !kept.includes(task));
-      return [...kept, ...added];
-    });
-  }, [selected]);
-
-  const workload = useMemo(() => {
-    let hours = 0;
-    if (selected.includes("Tonte")) hours += surfaceHours[lawnSurface] ?? 1.3;
-    if (selected.includes("Taille de haies")) hours += 2.4 * (hedgeFactor[hedgeHeight] ?? 1);
-    selected.forEach((task) => { hours += otherTaskHours[task] ?? 0; });
-    return Math.max(1, Math.ceil(hours / 4));
-  }, [selected, lawnSurface, hedgeHeight]);
-
-  useEffect(() => setDuration(workload), [workload]);
+  const workload = useMemo(
+    () => calculateWorkload(selected, lawnSurface, hedgeHeight),
+    [selected, lawnSurface, hedgeHeight],
+  );
 
   const totals = useMemo(() => {
     const taskFee = Math.max(0, selected.length - 1) * 9;
@@ -102,7 +99,22 @@ export default function BookingPage() {
 
   const toggleTask = (name: string) => {
     setUnknownNeed(false);
-    setSelected((current) => current.includes(name) ? current.filter((item) => item !== name) : [...current, name]);
+    const next = selected.includes(name) ? selected.filter((item) => item !== name) : [...selected, name];
+    setSelected(next);
+    setPriority((priorities) => {
+      const kept = priorities.filter((task) => next.includes(task));
+      const added = next.filter((task) => !kept.includes(task));
+      return [...kept, ...added];
+    });
+    setDuration(calculateWorkload(next, lawnSurface, hedgeHeight));
+  };
+  const updateLawnSurface = (value: string) => {
+    setLawnSurface(value);
+    setDuration(calculateWorkload(selected, value, hedgeHeight));
+  };
+  const updateHedgeHeight = (value: string) => {
+    setHedgeHeight(value);
+    setDuration(calculateWorkload(selected, lawnSurface, value));
   };
   const movePriority = (index: number, direction: number) => {
     const target = index + direction;
@@ -117,29 +129,29 @@ export default function BookingPage() {
   return (
     <main className="booking-page">
       <header className="booking-header">
-        <a href="/" aria-label="Sergeant Paysage, accueil"><img src="/logo-sergeant-paysage-blanc.png" alt="Sergeant Paysage" /></a>
+        <Link href="/" aria-label="Sergeant Paysage, accueil"><Image src="/logo-sergeant-paysage-blanc.png" alt="Sergeant Paysage" width={1784} height={387} priority /></Link>
         <div className="progress-wrap"><span>Étape {step} sur 6</span><div className="progress"><i style={{ width: `${(step / 6) * 100}%` }} /></div></div>
-        <a className="quit" href="/" aria-label="Quitter la réservation">× <span>Quitter</span></a>
+        <Link className="quit" href="/" aria-label="Quitter la réservation">× <span>Quitter</span></Link>
       </header>
 
       <div className="booking-layout">
         <section className="booking-main" key={step}>
           {step === 1 && <StepNeeds selected={selected} toggleTask={toggleTask} unknownNeed={unknownNeed} setUnknownNeed={setUnknownNeed} />}
-          {step === 2 && <StepDetails selected={selected} lawnSurface={lawnSurface} setLawnSurface={setLawnSurface} grass={grass} setGrass={setGrass} terrain={terrain} setTerrain={setTerrain} hedgeLength={hedgeLength} setHedgeLength={setHedgeLength} hedgeHeight={hedgeHeight} setHedgeHeight={setHedgeHeight} hedgeFaces={hedgeFaces} setHedgeFaces={setHedgeFaces} />}
+          {step === 2 && <StepDetails selected={selected} lawnSurface={lawnSurface} setLawnSurface={updateLawnSurface} grass={grass} setGrass={setGrass} terrain={terrain} setTerrain={setTerrain} hedgeLength={hedgeLength} setHedgeLength={setHedgeLength} hedgeHeight={hedgeHeight} setHedgeHeight={updateHedgeHeight} hedgeFaces={hedgeFaces} setHedgeFaces={setHedgeFaces} />}
           {step === 3 && <StepDuration duration={duration} setDuration={setDuration} recommended={workload} priority={priority} movePriority={movePriority} waste={waste} setWaste={setWaste} />}
           {step === 4 && <StepSchedule mode={scheduleMode} setMode={setScheduleMode} date={date} setDate={setDate} customDate={customDate} setCustomDate={setCustomDate} slot={slot} setSlot={setSlot} flexible={flexible} setFlexible={setFlexible} />}
           {step === 5 && <StepAccess access={access} setAccess={setAccess} accessType={accessType} setAccessType={setAccessType} parking={parking} setParking={setParking} distance={distance} setDistance={setDistance} passageWidth={passageWidth} setPassageWidth={setPassageWidth} animal={animal} setAnimal={setAnimal} />}
           {step === 6 && <StepCheckout address={address} setAddress={setAddress} selected={selected} slot={slot} duration={duration} waste={waste} totals={totals} legal={legal} setLegal={setLegal} />}
 
           <div className="booking-actions">
-            {step === 1 ? <a className="back-button" href="/">← Retour à l’accueil</a> : <button className="back-button" onClick={goBack}>← Retour</button>}
+            {step === 1 ? <Link className="back-button" href="/">← Retour à l’accueil</Link> : <button className="back-button" onClick={goBack}>← Retour</button>}
             {step < 6 ? <button className="button button-primary" onClick={goNext}>Continuer <span>→</span></button> : <a className={`button button-primary final-book${legal ? "" : " disabled"}`} href={legal ? "/confirmation" : undefined} aria-disabled={!legal}>Réserver — {totals.total} € à payer après intervention</a>}
           </div>
         </section>
         <Summary address={address} selected={selected} lawnSurface={lawnSurface} hedgeLength={hedgeLength} hedgeHeight={hedgeHeight} duration={duration} waste={waste} totals={totals} />
       </div>
       <div className="mobile-price-bar">
-        {step === 1 ? <a className="mobile-back" href="/" aria-label="Retour à l’accueil">←</a> : <button className="mobile-back" onClick={goBack} aria-label="Étape précédente">←</button>}
+        {step === 1 ? <Link className="mobile-back" href="/" aria-label="Retour à l’accueil">←</Link> : <button className="mobile-back" onClick={goBack} aria-label="Étape précédente">←</button>}
         <div><strong>{totals.total} €</strong><small>{durationLabel(duration)}</small></div>
         {step < 6 ? <button onClick={goNext}>Continuer →</button> : <a className={!legal ? "disabled" : ""} href={legal ? "/confirmation" : undefined}>Réserver</a>}
       </div>
@@ -166,7 +178,7 @@ function StepNeeds({ selected, toggleTask, unknownNeed, setUnknownNeed }: { sele
   };
   return <>
     <Intro eyebrow="Votre besoin" title="Que souhaitez-vous faire ?" copy="Vous pouvez sélectionner plusieurs tâches pour la même intervention." />
-    <div className="task-grid">{tasks.map(([name, title, desc, image]) => <button type="button" key={name} className={selected.includes(name) ? "task-card selected" : "task-card"} onClick={() => toggleTask(name)} aria-pressed={selected.includes(name)}><img src={image} alt="" /><div><small>{name}</small><strong>{title}</strong><span>{desc}</span></div><i>{selected.includes(name) ? "✓" : "+"}</i></button>)}</div>
+    <div className="task-grid">{tasks.map(([name, title, desc, image]) => <button type="button" key={name} className={selected.includes(name) ? "task-card selected" : "task-card"} onClick={() => toggleTask(name)} aria-pressed={selected.includes(name)}><Image src={image} alt="" width={1000} height={668} sizes="(max-width: 600px) 110px, 150px" /><div><small>{name}</small><strong>{title}</strong><span>{desc}</span></div><i>{selected.includes(name) ? "✓" : "+"}</i></button>)}</div>
     <button type="button" className={`unknown-link${unknownNeed ? " selected" : ""}`} onClick={openUnknown} aria-expanded={unknownNeed}>Je ne sais pas exactement ce qu’il faut {unknownNeed ? "↑" : "→"}</button>
     {unknownNeed && <div className="unknown-panel"><h2>Montrez-nous simplement le jardin.</h2><p>Décrivez ce que vous observez et ajoutez quelques photos. L’équipe préparera la mission à partir de ces éléments.</p><label htmlFor="unknown-description">Ce qu’il faudrait améliorer<textarea id="unknown-description" placeholder="Exemple : le jardin n’a pas été entretenu depuis plusieurs mois, je souhaite surtout qu’il soit remis au propre…" /></label><label className="unknown-upload"><input type="file" multiple accept="image/*" />+ Ajouter des photos</label></div>}
   </>;
@@ -177,7 +189,7 @@ function StepDetails({ selected, lawnSurface, setLawnSurface, grass, setGrass, t
   return <>
     <Intro eyebrow="Les détails" title="Aidez-nous à prévoir juste." copy="Ces informations affinent la durée recommandée, le matériel nécessaire et le prix." />
     {selected.includes("Tonte") && <div className="detail-card"><h2>Pelouse</h2><Choice label="Quelle surface à entretenir environ ?" values={["< 100 m²", "100–250 m²", "250–500 m²", "500–1 000 m²", "+ 1 000 m²"]} value={lawnSurface} setValue={setLawnSurface} /><Choice label="État actuel" values={["Entretenue", "Haute", "Très haute"]} value={grass} setValue={setGrass} visual /><Choice label="Inclinaison du terrain" values={["Plat", "Légèrement en pente", "Forte pente"]} value={terrain} setValue={setTerrain} /></div>}
-    {selected.includes("Taille de haies") && <div className="detail-card"><h2>Haies</h2><label className="counter-field"><span>Longueur totale</span><div><button type="button" onClick={() => setHedgeLength(Math.max(1, hedgeLength - 1))}>−</button><strong>{hedgeLength} m</strong><button type="button" onClick={() => setHedgeLength(hedgeLength + 1)}>+</button></div></label><Choice label="Hauteur" values={["< 1,5 m", "1,5–2 m", "2–2,5 m", "2,5–3 m", "+ 3 m"]} value={hedgeHeight} setValue={setHedgeHeight} /><Choice label="Que faut-il tailler ?" values={["Dessus", "1 côté", "2 côtés", "3 faces"]} value={hedgeFaces} setValue={setHedgeFaces} /></div>}
+    {selected.includes("Taille de haies") && <div className="detail-card"><h2>Haies</h2><div className="counter-field"><span>Longueur totale</span><div><button type="button" onClick={() => setHedgeLength(Math.max(1, hedgeLength - 1))}>−</button><strong>{hedgeLength} m</strong><button type="button" onClick={() => setHedgeLength(hedgeLength + 1)}>+</button></div></div><Choice label="Hauteur" values={["< 1,5 m", "1,5–2 m", "2–2,5 m", "2,5–3 m", "+ 3 m"]} value={hedgeHeight} setValue={setHedgeHeight} /><Choice label="Que faut-il tailler ?" values={["Dessus", "1 côté", "2 côtés", "3 faces"]} value={hedgeFaces} setValue={setHedgeFaces} /></div>}
     <div className="upload-card"><span>Photos</span><h2>Quelques photos peuvent nous éviter de vous appeler.</h2><label><input type="file" multiple accept="image/*" />+ Ajouter des photos</label><p>Prenez une vue d’ensemble et, si besoin, une photo rapprochée. Maximum 8 photos. Évitez si possible d’inclure des personnes.</p></div>
   </>;
 }

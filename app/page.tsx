@@ -1,3 +1,5 @@
+import Image from "next/image";
+import Link from "next/link";
 import { Footer, Header, SectionLabel } from "./components";
 
 const services = [
@@ -25,8 +27,8 @@ export default function Home() {
           <h1>Votre jardin entretenu, <em>sans passer un seul appel.</em></h1>
           <p className="hero-lead">Choisissez les travaux, la durée et votre créneau. Votre prix se calcule immédiatement et nous venons avec tout le matériel.</p>
           <div className="hero-actions">
-            <a className="button button-primary" href="/reserver">Commencer ma réservation <span>→</span></a>
-            <p>Déjà client ? <a href="/espace-client">Reprogrammer une intervention</a></p>
+            <Link className="button button-primary" href="/reserver">Commencer ma réservation <span>→</span></Link>
+            <p>Déjà client ? <Link href="/espace-client">Reprogrammer une intervention</Link></p>
           </div>
           <div className="proofs" aria-label="Les engagements Sergeant Paysage">
             <span>✓ Prix connu à l’avance</span><span>✓ Matériel professionnel inclus</span><span>✓ Réservation 100 % en ligne</span><span>✓ Intervention assurée</span>
@@ -34,7 +36,7 @@ export default function Home() {
           <p className="tax-note">Jusqu’à 50 % de crédit d’impôt sur les prestations éligibles*</p>
         </div>
         <div className="hero-visual reveal-now">
-          <div className="hero-image-wrap"><img src="/images/hero-gardener.jpg" alt="Paysagiste de dos entretenant une grande pelouse" /></div>
+          <div className="hero-image-wrap"><Image src="/images/hero-gardener.jpg" alt="Paysagiste de dos entretenant une grande pelouse" width={1800} height={2400} sizes="(max-width: 820px) 92vw, 48vw" priority /></div>
           <div className="booking-float">
             <span className="booking-status">Réservé <b>✓</b></span>
             <small>Jeudi 20 août</small>
@@ -53,13 +55,13 @@ export default function Home() {
         </div>
         <div className="service-grid">
           {services.map((service, index) => (
-            <a className="service-card" href={`/reserver?service=${encodeURIComponent(service.name)}`} key={service.name}>
-              <figure><img src={service.image} alt="" /><span>0{index + 1}</span></figure>
+            <Link className="service-card" href={`/reserver?service=${encodeURIComponent(service.name)}`} key={service.name}>
+              <figure><Image src={service.image} alt="" width={1000} height={668} sizes="(max-width: 560px) 88vw, (max-width: 1120px) 44vw, 29vw" /><span>0{index + 1}</span></figure>
               <div><h3>{service.name}</h3><p>{service.desc}</p><b>Réserver <span>→</span></b></div>
-            </a>
+            </Link>
           ))}
         </div>
-        <a className="project-door" href="/projet"><span>Un projet plus important ?</span><b>Création, plantation, terrassement, arrosage…</b><i>→</i></a>
+        <Link className="project-door" href="/projet"><span>Un projet plus important ?</span><b>Création, plantation, terrassement, arrosage…</b><i>→</i></Link>
       </section>
 
       <section className="dark-section how-section" id="fonctionnement">
@@ -69,7 +71,7 @@ export default function Home() {
           <article><span>02</span><h3>Choisissez votre créneau</h3><p>Les disponibilités affichées sont de vraies disponibilités.</p></article>
           <article><span>03</span><h3>On s’occupe du reste</h3><p>Votre jardinier arrive avec les informations et le matériel nécessaires.</p></article>
         </div>
-        <a className="button button-light" href="/reserver">Réserver une intervention <span>→</span></a>
+        <Link className="button button-light" href="/reserver">Réserver une intervention <span>→</span></Link>
       </section>
 
       <section className="mission-section">
@@ -98,17 +100,17 @@ export default function Home() {
 
       <section className="tax-section">
         <div><SectionLabel number="04">Services à la personne</SectionLabel><h2>Votre jardin peut aussi coûter <em>deux fois moins cher.</em></h2></div>
-        <div><p>Certaines prestations d’entretien de jardin sont éligibles au crédit d’impôt de 50 %, dans la limite réglementaire applicable.</p><span className="advance">Avance immédiate disponible</span><a className="text-link" href="/tarifs#fiscalite">Comprendre le crédit d’impôt <span>→</span></a></div>
+        <div><p>Certaines prestations d’entretien de jardin sont éligibles au crédit d’impôt de 50 %, dans la limite réglementaire applicable.</p><span className="advance">Avance immédiate disponible</span><Link className="text-link" href="/tarifs#fiscalite">Comprendre le crédit d’impôt <span>→</span></Link></div>
       </section>
 
       <section className="section recurring-section">
         <SectionLabel number="05">Entretien régulier</SectionLabel>
         <h2>Et si votre jardin restait <em>toujours comme ça ?</em></h2>
         <div className="frequency-grid">
-          <a href="/reserver?recurrence=2-semaines">Toutes les 2 semaines<span>Jardin très suivi</span></a>
-          <a className="recommended" href="/reserver?recurrence=4-semaines"><b>Recommandé</b>Toutes les 4 semaines<span>Le bon rythme saisonnier</span></a>
-          <a href="/reserver?recurrence=6-semaines">Toutes les 6 semaines<span>Entretien essentiel</span></a>
-          <a href="/reserver?recurrence=sur-mesure">Sur mesure<span>Un calendrier adapté</span></a>
+          <Link href="/reserver?recurrence=2-semaines">Toutes les 2 semaines<span>Jardin très suivi</span></Link>
+          <Link className="recommended" href="/reserver?recurrence=4-semaines"><b>Recommandé</b>Toutes les 4 semaines<span>Le bon rythme saisonnier</span></Link>
+          <Link href="/reserver?recurrence=6-semaines">Toutes les 6 semaines<span>Entretien essentiel</span></Link>
+          <Link href="/reserver?recurrence=sur-mesure">Sur mesure<span>Un calendrier adapté</span></Link>
         </div>
       </section>
 
