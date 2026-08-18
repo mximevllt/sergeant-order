@@ -1,6 +1,3 @@
-"use client";
-
-import { useMemo, useState } from "react";
 import { Footer, Header, SectionLabel } from "./components";
 
 const services = [
@@ -19,16 +16,6 @@ const testimonials = [
 ];
 
 export default function Home() {
-  const [lawn, setLawn] = useState(true);
-  const [hedges, setHedges] = useState(true);
-  const [surface, setSurface] = useState(250);
-  const [length, setLength] = useState(18);
-  const estimate = useMemo(() => {
-    const workload = (lawn ? surface / 125 : 0) + (hedges ? length / 9 : 0);
-    const blocks = Math.max(1, Math.ceil(workload / 4));
-    return { blocks, price: 219 * blocks };
-  }, [lawn, hedges, surface, length]);
-
   return (
     <main>
       <Header />
@@ -85,32 +72,9 @@ export default function Home() {
         <a className="button button-light" href="/reserver">Réserver une intervention <span>→</span></a>
       </section>
 
-      <section className="section demo-section" id="tarifs">
-        <div className="demo-copy">
-          <SectionLabel number="03">Prix instantané</SectionLabel>
-          <h2>Votre prix évolue avec votre besoin. <em>Pas de devis à attendre.</em></h2>
-          <p>Le site estime la durée à votre place. Vous gardez toujours la main sur la formule recommandée.</p>
-          <a className="text-link" href="/reserver">Configurer mon jardin <span>→</span></a>
-        </div>
-        <div className="demo-card" aria-label="Démonstrateur de prix">
-          <div className="demo-title"><span>Votre intervention</span><small>Prix mis à jour</small></div>
-          <div className="demo-toggles">
-            <button className={lawn ? "selected" : ""} onClick={() => setLawn(!lawn)} aria-pressed={lawn}>Tonte <span>{lawn ? "✓" : "+"}</span></button>
-            <button className={hedges ? "selected" : ""} onClick={() => setHedges(!hedges)} aria-pressed={hedges}>Taille de haies <span>{hedges ? "✓" : "+"}</span></button>
-          </div>
-          {lawn && <label className="range-field">Surface pelouse <output>{surface} m²</output><input type="range" min="50" max="1000" step="50" value={surface} onChange={(e) => setSurface(Number(e.target.value))} /></label>}
-          {hedges && <label className="range-field">Longueur des haies <output>{length} m</output><input type="range" min="2" max="60" step="2" value={length} onChange={(e) => setLength(Number(e.target.value))} /></label>}
-          <div className="select-line"><span>Hauteur</span><strong>1,5–2 m</strong></div>
-          <div className="demo-total">
-            <div><small>Durée recommandée</small><strong>{estimate.blocks === 1 ? "1 demi-journée" : `${estimate.blocks / 2} journée${estimate.blocks > 2 ? "s" : ""}`}</strong></div>
-            <div><small>Prix TTC</small><strong key={estimate.price}>{estimate.price} €</strong><span>≈ {Math.ceil(estimate.price / 2)} € après crédit d’impôt*</span></div>
-          </div>
-        </div>
-      </section>
-
       <section className="mission-section">
         <div className="mission-copy">
-          <SectionLabel number="04" light>Préparation</SectionLabel>
+          <SectionLabel number="03" light>Préparation</SectionLabel>
           <h2>Vous n’avez rien à préparer. <em>Nous, si.</em></h2>
           <p>Toutes les informations sont transmises au jardinier avant son départ. Le bon matériel, le bon ordre de priorité, sans appel supplémentaire.</p>
         </div>
@@ -133,12 +97,12 @@ export default function Home() {
       </section>
 
       <section className="tax-section">
-        <div><SectionLabel number="05">Services à la personne</SectionLabel><h2>Votre jardin peut aussi coûter <em>deux fois moins cher.</em></h2></div>
+        <div><SectionLabel number="04">Services à la personne</SectionLabel><h2>Votre jardin peut aussi coûter <em>deux fois moins cher.</em></h2></div>
         <div><p>Certaines prestations d’entretien de jardin sont éligibles au crédit d’impôt de 50 %, dans la limite réglementaire applicable.</p><span className="advance">Avance immédiate disponible</span><a className="text-link" href="/tarifs#fiscalite">Comprendre le crédit d’impôt <span>→</span></a></div>
       </section>
 
       <section className="section recurring-section">
-        <SectionLabel number="06">Entretien régulier</SectionLabel>
+        <SectionLabel number="05">Entretien régulier</SectionLabel>
         <h2>Et si votre jardin restait <em>toujours comme ça ?</em></h2>
         <div className="frequency-grid">
           <a href="/reserver?recurrence=2-semaines">Toutes les 2 semaines<span>Jardin très suivi</span></a>
@@ -149,7 +113,7 @@ export default function Home() {
       </section>
 
       <section className="faq-section" id="faq">
-        <div><SectionLabel number="07" light>Questions fréquentes</SectionLabel><h2>Tout ce qu’il faut savoir, <em>avant de réserver.</em></h2></div>
+        <div><SectionLabel number="06" light>Questions fréquentes</SectionLabel><h2>Tout ce qu’il faut savoir, <em>avant de réserver.</em></h2></div>
         <div className="faq-list">
           {[
             ["Dois-je être présent ?", "Non. Vous pouvez nous transmettre les instructions d’accès au moment de la réservation."],

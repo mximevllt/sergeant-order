@@ -17,8 +17,6 @@ const datesByMode: Record<string, string[]> = {
 };
 
 const surfaceHours: Record<string, number> = { "< 100 m²": .8, "100–250 m²": 1.3, "250–500 m²": 2.1, "500–1 000 m²": 3.6, "+ 1 000 m²": 5.2 };
-const grassFactor: Record<string, number> = { Entretenue: 1, Haute: 1.35, "Très haute": 1.8 };
-const terrainFactor: Record<string, number> = { Plat: 1, "Légèrement en pente": 1.15, "Forte pente": 1.35 };
 const hedgeFactor: Record<string, number> = { "< 1,5 m": .8, "1,5–2 m": 1, "2–2,5 m": 1.25, "2,5–3 m": 1.55, "+ 3 m": 2.1 };
 const otherTaskHours: Record<string, number> = { Débroussaillage: 2.4, Massifs: 1.6, Nettoyage: 1.4, "Entretien complet": 3.8 };
 
@@ -46,7 +44,7 @@ export default function BookingPage() {
   const [hedgeFaces, setHedgeFaces] = useState("3 faces");
   const [duration, setDuration] = useState(1);
   const [waste, setWaste] = useState("emporter");
-  const [priority, setPriority] = useState(["Taille de haies", "Tonte", "Désherbage"]);
+  const [priority, setPriority] = useState<string[]>(["Tonte", "Taille de haies"]);
   const [scheduleMode, setScheduleMode] = useState("soon");
   const [date, setDate] = useState("jeu. 20");
   const [customDate, setCustomDate] = useState("");
@@ -64,21 +62,33 @@ export default function BookingPage() {
     window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   }, [step]);
 
+  useEffect(() => {
+    setPriority((current) => {
+      const kept = current.filter((task) => selected.includes(task));
+      const added = selected.filter((task) => !kept.includes(task));
+      return [...kept, ...added];
+    });
+  }, [selected]);
+
   const workload = useMemo(() => {
     let hours = 0;
-    if (selected.includes("Tonte")) hours += (surfaceHours[lawnSurface] ?? 1.3) * (grassFactor[grass] ?? 1) * (terrainFactor[terrain] ?? 1);
-    if (selected.includes("Taille de haies")) hours += .8 + (hedgeLength / 10) * (hedgeFactor[hedgeHeight] ?? 1) * ({ Dessus: .55, "1 côté": .65, "2 côtés": .82, "3 faces": 1 }[hedgeFaces] ?? 1);
+    if (selected.includes("Tonte")) hours += surfaceHours[lawnSurface] ?? 1.3;
+    if (selected.includes("Taille de haies")) hours += 2.4 * (hedgeFactor[hedgeHeight] ?? 1);
     selected.forEach((task) => { hours += otherTaskHours[task] ?? 0; });
     return Math.max(1, Math.ceil(hours / 4));
-  }, [selected, lawnSurface, grass, terrain, hedgeLength, hedgeHeight, hedgeFaces]);
+  }, [selected, lawnSurface, hedgeHeight]);
 
   useEffect(() => setDuration(workload), [workload]);
 
   const totals = useMemo(() => {
     const taskFee = Math.max(0, selected.length - 1) * 9;
-    const detailFee = (grass === "Haute" ? 14 : grass === "Très haute" ? 32 : 0)
-      + (terrain === "Légèrement en pente" ? 8 : terrain === "Forte pente" ? 19 : 0)
-      + (hedgeHeight === "2–2,5 m" ? 9 : hedgeHeight === "2,5–3 m" ? 18 : hedgeHeight === "+ 3 m" ? 34 : 0);
+    const lawnFee = selected.includes("Tonte") ? (grass === "Haute" ? 4 : grass === "Très haute" ? 9 : 0) : 0;
+    const hedgeFee = selected.includes("Taille de haies")
+      ? Math.max(0, Math.round((hedgeLength - 5) * .75))
+        + ({ Dessus: 0, "1 côté": 3, "2 côtés": 6, "3 faces": 9 }[hedgeFaces] ?? 0)
+        + (hedgeHeight === "2–2,5 m" ? 9 : hedgeHeight === "2,5–3 m" ? 18 : hedgeHeight === "+ 3 m" ? 34 : 0)
+      : 0;
+    const detailFee = lawnFee + hedgeFee;
     const accessFee = (access.includes("sans moi") ? 4 : 0)
       + (access.includes("sans moi") ? ({ "Portail ouvert": 0, "Boîte à clés": 4, Code: 3, Autre: 6 }[accessType] ?? 0) : 0)
       + (parking === "Non" ? 12 : 0)
@@ -88,7 +98,7 @@ export default function BookingPage() {
     const reduction = flexible ? 10 : 0;
     const total = intervention + taskFee + detailFee + accessFee + evacuation - reduction;
     return { intervention, taskFee, detailFee, accessFee, evacuation, reduction, total, afterTax: Math.ceil(total / 2) };
-  }, [duration, selected, grass, terrain, hedgeHeight, access, accessType, parking, distance, waste, flexible]);
+  }, [duration, selected, grass, hedgeLength, hedgeHeight, hedgeFaces, access, accessType, parking, distance, waste, flexible]);
 
   const toggleTask = (name: string) => {
     setUnknownNeed(false);
@@ -165,7 +175,7 @@ function StepNeeds({ selected, toggleTask, unknownNeed, setUnknownNeed }: { sele
 type DetailsProps = { selected: string[]; lawnSurface: string; setLawnSurface: (v: string) => void; grass: string; setGrass: (v: string) => void; terrain: string; setTerrain: (v: string) => void; hedgeLength: number; setHedgeLength: (v: number) => void; hedgeHeight: string; setHedgeHeight: (v: string) => void; hedgeFaces: string; setHedgeFaces: (v: string) => void };
 function StepDetails({ selected, lawnSurface, setLawnSurface, grass, setGrass, terrain, setTerrain, hedgeLength, setHedgeLength, hedgeHeight, setHedgeHeight, hedgeFaces, setHedgeFaces }: DetailsProps) {
   return <>
-    <Intro eyebrow="Les détails" title="Aidez-nous à prévoir juste." copy="Chaque réponse affine instantanément la durée recommandée et le prix." />
+    <Intro eyebrow="Les détails" title="Aidez-nous à prévoir juste." copy="Ces informations affinent la durée recommandée, le matériel nécessaire et le prix." />
     {selected.includes("Tonte") && <div className="detail-card"><h2>Pelouse</h2><Choice label="Quelle surface à entretenir environ ?" values={["< 100 m²", "100–250 m²", "250–500 m²", "500–1 000 m²", "+ 1 000 m²"]} value={lawnSurface} setValue={setLawnSurface} /><Choice label="État actuel" values={["Entretenue", "Haute", "Très haute"]} value={grass} setValue={setGrass} visual /><Choice label="Inclinaison du terrain" values={["Plat", "Légèrement en pente", "Forte pente"]} value={terrain} setValue={setTerrain} /></div>}
     {selected.includes("Taille de haies") && <div className="detail-card"><h2>Haies</h2><label className="counter-field"><span>Longueur totale</span><div><button type="button" onClick={() => setHedgeLength(Math.max(1, hedgeLength - 1))}>−</button><strong>{hedgeLength} m</strong><button type="button" onClick={() => setHedgeLength(hedgeLength + 1)}>+</button></div></label><Choice label="Hauteur" values={["< 1,5 m", "1,5–2 m", "2–2,5 m", "2,5–3 m", "+ 3 m"]} value={hedgeHeight} setValue={setHedgeHeight} /><Choice label="Que faut-il tailler ?" values={["Dessus", "1 côté", "2 côtés", "3 faces"]} value={hedgeFaces} setValue={setHedgeFaces} /></div>}
     <div className="upload-card"><span>Photos</span><h2>Quelques photos peuvent nous éviter de vous appeler.</h2><label><input type="file" multiple accept="image/*" />+ Ajouter des photos</label><p>Prenez une vue d’ensemble et, si besoin, une photo rapprochée. Maximum 8 photos. Évitez si possible d’inclure des personnes.</p></div>
