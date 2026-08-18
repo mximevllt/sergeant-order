@@ -82,7 +82,7 @@ export default function BookingPage() {
 
   const totals = useMemo(() => {
     const taskFee = Math.max(0, selected.length - 1) * 9;
-    const lawnFee = selected.includes("Tonte") ? (grass === "Haute" ? 4 : grass === "Très haute" ? 9 : 0) : 0;
+    const lawnFee = selected.includes("Tonte") ? (grass === "Haute" ? 20 : grass === "Très haute" ? 60 : 0) : 0;
     const hedgeFee = selected.includes("Taille de haies")
       ? Math.max(0, Math.round((hedgeLength - 5) * .75))
         + ({ Dessus: 0, "1 côté": 3, "2 côtés": 6, "3 faces": 9 }[hedgeFaces] ?? 0)
