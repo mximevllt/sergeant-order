@@ -567,6 +567,7 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .account-start-grid h3 { margin-top: 35px; font-size: 28px; }
 .account-start-grid p { margin-top: 9px; color: var(--sage); font-size: 11px; line-height: 1.55; }
 .account-start-grid a { margin-top: 28px; padding-bottom: 6px; display: inline-block; color: var(--bronze); border-bottom: 1px solid var(--line); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+.text-action { margin-top: 28px; padding: 0 0 6px; color: var(--bronze); background: transparent; border: 0; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
 .client-empty { max-width: 700px; min-height: 330px; padding: 45px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; background: var(--paper); border: 1px solid rgba(33,46,35,.08); }
 .client-empty > span { color: var(--bronze); font-family: var(--display); font-size: 45px; line-height: 1; }
 .client-empty h3 { margin-top: 20px; font-size: 30px; }
@@ -590,6 +591,10 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .live-card p b { margin-right: 6px; color: var(--bronze); }
 .live-card > span { color: var(--sage); font-size: 9px; }
 .dashboard-title { margin: 55px 0 22px; font-size: 31px; }
+.dashboard-heading { margin-top: 55px; display: flex; justify-content: space-between; align-items: end; gap: 25px; }
+.dashboard-heading .dashboard-title { margin: 0 0 4px; }
+.dashboard-heading p { color: var(--sage); font-size: 11px; }
+.dashboard-heading > .button { flex: 0 0 auto; }
 .repeat-grid, .garden-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .repeat-grid article, .garden-card, .add-garden { min-height: 210px; padding: 25px; background: var(--paper); border: 1px solid rgba(33,46,35,.08); }
 .repeat-grid h3, .garden-card h3 { margin-top: 25px; font-size: 28px; }
@@ -598,6 +603,10 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .garden-grid { grid-template-columns: repeat(3,1fr); }
 .garden-card { min-height: 245px; }
 .garden-card p { line-height: 1.6; }
+.garden-card dl { margin-top: 20px; padding-top: 15px; display: flex; gap: 28px; border-top: 1px solid var(--line); }
+.garden-card dl div { display: grid; gap: 4px; }
+.garden-card dt { color: var(--sage); font-size: 8px; letter-spacing: .12em; text-transform: uppercase; }
+.garden-card dd { margin: 0; font-size: 10px; }
 .add-garden { cursor: pointer; border: 1px dashed var(--bronze); color: var(--bronze); font-size: 11px; }
 .invoice-list { background: var(--paper); }
 .invoice-list p { padding: 20px; display: grid; grid-template-columns: 1fr auto 1fr; gap: 25px; border-bottom: 1px solid var(--line); font-size: 10px; }
@@ -607,12 +616,36 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .fiscal-card > strong { display: block; margin-top: 18px; font-family: var(--display); font-size: 50px; }
 .fiscal-card p { color: rgba(246,244,235,.55); font-size: 10px; }
 .fiscal-card button, .profile-card button { margin-top: 25px; min-height: 42px; padding: 0 16px; color: var(--ink); background: var(--paper); border: 0; border-radius: 8px; font-size: 9px; }
-.profile-card { max-width: 650px; padding: 30px; background: var(--paper); }
-.profile-card label { margin-top: 18px; display: block; font-size: 10px; }
-.profile-card input { width: 100%; min-height: 50px; margin-top: 7px; padding: 0 13px; border: 1px solid rgba(33,46,35,.16); border-radius: 8px; }
+.profile-card { max-width: 760px; padding: 30px; background: var(--paper); }
+.profile-card fieldset, .garden-form fieldset { min-width: 0; margin: 0; padding: 0 0 28px; border: 0; }
+.profile-card fieldset + fieldset { padding-top: 28px; border-top: 1px solid var(--line); }
+.profile-card legend, .garden-form legend { margin-bottom: 4px; font-family: var(--display); font-size: 22px; }
+.profile-card label, .garden-form label { margin-top: 18px; display: block; font-size: 10px; }
+.profile-card input, .garden-form input, .garden-form select, .garden-form textarea { width: 100%; min-height: 50px; margin-top: 7px; padding: 0 13px; color: var(--ink); background: white; border: 1px solid rgba(33,46,35,.16); border-radius: 8px; font: inherit; }
+.garden-form textarea { min-height: 90px; padding-block: 12px; resize: vertical; }
 .profile-card input[readonly] { color: var(--ink); background: #efeee8; }
+.profile-card label small { margin-top: 6px; display: block; color: var(--sage); font-size: 8px; line-height: 1.5; }
 .profile-card > p { margin-top: 24px; color: var(--sage); font-size: 10px; line-height: 1.55; }
 .profile-card button { color: var(--paper); background: var(--ink); }
+.profile-card button:disabled, .garden-form button:disabled { cursor: wait; opacity: .55; }
+.profile-type { display: flex; gap: 10px; }
+.profile-type label { min-height: 50px; padding: 0 18px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.profile-type input { width: auto; min-height: 0; margin: 0; accent-color: var(--bronze); }
+.compact-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.garden-form { margin: 24px 0; padding: 30px; background: var(--paper); border: 1px solid rgba(33,46,35,.08); }
+.garden-form > header { margin-bottom: 28px; display: flex; justify-content: space-between; align-items: start; }
+.garden-form > header span { color: var(--bronze); font-size: 8px; letter-spacing: .2em; text-transform: uppercase; }
+.garden-form > header h3 { margin-top: 7px; font-size: 30px; }
+.garden-form > header > button { width: 36px; height: 36px; cursor: pointer; color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 50%; font-size: 22px; }
+.form-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 35px; }
+.garden-form .check-line { display: flex; align-items: center; gap: 10px; }
+.garden-form .check-line input { width: auto; min-height: 0; margin: 0; accent-color: var(--bronze); }
+.garden-form footer { padding-top: 22px; display: flex; align-items: center; gap: 15px; border-top: 1px solid var(--line); }
+.button-secondary, .danger-action { min-height: 45px; padding: 0 15px; cursor: pointer; background: transparent; border: 0; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+.danger-action { margin-left: auto; color: #8b3832; }
+.form-status { margin: 0 0 20px; padding: 13px 15px; border-left: 3px solid; font-size: 10px; line-height: 1.5; }
+.form-status.success { color: #29543b; background: #e6efe8; border-color: #50775d; }
+.form-status.error { color: #6b2522; background: #f5e5e2; border-color: #9b443e; }
 
 .admin-app { min-height: 100vh; display: grid; grid-template-columns: 230px 1fr; background: #ecebe4; }
 .admin-app > aside { min-height: 100vh; padding: 25px 18px; display: flex; flex-direction: column; color: var(--paper); background: var(--ink); }
@@ -700,6 +733,7 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
   .client-nav > form + a:last-child { display: none; }
   .client-nav > a:last-child { display: none; }
   .client-content { padding: 40px 5vw 80px; }
+  .form-columns { grid-template-columns: 1fr; }
   .admin-app > aside { min-height: auto; padding: 18px; flex-direction: row; align-items: center; gap: 18px; overflow-x: auto; }
   .admin-app > aside > a img { width: 145px; }
   .admin-app > aside nav { margin: 0 0 0 auto; display: flex; white-space: nowrap; }
@@ -716,6 +750,11 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
   .login-card > h1, .login-confirmation h1 { font-size: 47px; }
   .login-form .button { width: 100%; }
   .account-start-grid { grid-template-columns: 1fr; }
+  .dashboard-heading { align-items: flex-start; flex-direction: column; }
+  .compact-fields { grid-template-columns: 1fr; }
+  .garden-form { padding: 22px; }
+  .garden-form footer { align-items: flex-start; flex-direction: column; }
+  .danger-action { margin-left: 0; }
   .account-ready-card { align-items: flex-start; padding: 27px; }
   .account-ready-card h2 { font-size: 30px; }
   .client-empty { padding: 30px; }

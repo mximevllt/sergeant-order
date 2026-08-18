@@ -169,6 +169,100 @@ test("crée un compte par lien, ouvre une session, interdit la réutilisation et
   assert.match(accountHtml, /camille\.jardin@example\.fr/u);
   assert.equal(database.prepare("SELECT email_verified_at IS NOT NULL AS verified FROM users").get().verified, 1);
 
+  const profileResponse = await render("/api/customer/profile", {
+    accept: "application/json",
+    method: "PATCH",
+    headers: { Cookie: sessionCookie, Origin: "http://localhost", "Content-Type": "application/json" },
+    body: JSON.stringify({
+      fullName: "Camille Jardinier",
+      phone: "06 12 34 56 78",
+      customerType: "PROFESSIONAL",
+      organization: {
+        legalName: "Les Jardins de Camille",
+        tradeName: "Camille & Jardin",
+        siren: "123456789",
+        vatNumber: "FR12123456789",
+        billingEmail: "factures@example.fr",
+        billingAddress: { line1: "8 rue des Fleurs", postalCode: "83170", city: "Brignoles" },
+      },
+    }),
+    bindings: { DB: binding },
+  });
+  assert.equal(profileResponse.status, 200);
+  assert.equal((await profileResponse.json()).profile.customerType, "PROFESSIONAL");
+  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM organizations").get().count, 1);
+  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM user_roles WHERE role = 'PRO_CUSTOMER_ADMIN'").get().count, 1);
+
+  const gardenPayload = {
+    label: "Maison de Brignoles",
+    address: { label: "Entrée principale", line1: "22 chemin des Consacs", postalCode: "83170", city: "Brignoles" },
+    surfaceM2: 850,
+    terrainSlope: "GENTLE",
+    accessWidthCm: 240,
+    hasAnimals: true,
+    parkingNotes: "Stationnement devant le portail",
+    publicNotes: "Prévenir avant l’arrivée",
+  };
+  const createGardenResponse = await render("/api/customer/gardens", {
+    accept: "application/json",
+    method: "POST",
+    headers: { Cookie: sessionCookie, Origin: "http://localhost", "Content-Type": "application/json" },
+    body: JSON.stringify(gardenPayload),
+    bindings: { DB: binding },
+  });
+  assert.equal(createGardenResponse.status, 201);
+  const garden = (await createGardenResponse.json()).garden;
+  assert.match(garden.id, /^[a-f0-9-]{36}$/u);
+  assert.equal(database.prepare("SELECT owner_user_id AS owner, internal_notes AS internalNotes FROM gardens WHERE id = ?").get(garden.id).owner, database.prepare("SELECT id FROM users").get().id);
+
+  const crossOriginGarden = await render(`/api/customer/gardens/${garden.id}`, {
+    accept: "application/json",
+    method: "PATCH",
+    headers: { Cookie: sessionCookie, Origin: "https://malveillant.example", "Content-Type": "application/json" },
+    body: JSON.stringify(gardenPayload),
+    bindings: { DB: binding },
+  });
+  assert.equal(crossOriginGarden.status, 403);
+
+  const updateGardenResponse = await render(`/api/customer/gardens/${garden.id}`, {
+    accept: "application/json",
+    method: "PATCH",
+    headers: { Cookie: sessionCookie, Origin: "http://localhost", "Content-Type": "application/json" },
+    body: JSON.stringify({ ...gardenPayload, label: "Jardin principal", surfaceM2: 900 }),
+    bindings: { DB: binding },
+  });
+  assert.equal(updateGardenResponse.status, 200);
+  assert.equal((await updateGardenResponse.json()).garden.surfaceM2, 900);
+
+  database.prepare("INSERT INTO users (id, email, email_normalized, full_name, status) VALUES ('other-user', 'other@example.fr', 'other@example.fr', 'Autre Client', 'ACTIVE')").run();
+  database.prepare("INSERT INTO addresses (id, owner_user_id, kind, line1, postal_code, city, department_code) VALUES ('22222222-2222-4222-8222-222222222221', 'other-user', 'SERVICE', '1 rue privée', '06000', 'Nice', '06')").run();
+  database.prepare("INSERT INTO gardens (id, owner_user_id, address_id, label) VALUES ('22222222-2222-4222-8222-222222222222', 'other-user', '22222222-2222-4222-8222-222222222221', 'Jardin privé')").run();
+  const foreignGardenResponse = await render("/api/customer/gardens/22222222-2222-4222-8222-222222222222", {
+    accept: "application/json",
+    method: "PATCH",
+    headers: { Cookie: sessionCookie, Origin: "http://localhost", "Content-Type": "application/json" },
+    body: JSON.stringify(gardenPayload),
+    bindings: { DB: binding },
+  });
+  assert.equal(foreignGardenResponse.status, 404);
+
+  const refreshedAccount = await render("/espace-client", { headers: { Cookie: sessionCookie }, bindings: { DB: binding } });
+  const refreshedHtml = await refreshedAccount.text();
+  assert.match(refreshedHtml, /Camille Jardinier/u);
+  assert.match(refreshedHtml, /Jardin principal/u);
+
+  const archiveResponse = await render(`/api/customer/gardens/${garden.id}`, {
+    accept: "application/json",
+    method: "DELETE",
+    headers: { Cookie: sessionCookie, Origin: "http://localhost" },
+    bindings: { DB: binding },
+  });
+  assert.equal(archiveResponse.status, 204);
+  assert.equal(database.prepare("SELECT archived_at IS NOT NULL AS archived FROM gardens WHERE id = ?").get(garden.id).archived, 1);
+  const listedGardens = await render("/api/customer/gardens", { accept: "application/json", headers: { Cookie: sessionCookie }, bindings: { DB: binding } });
+  assert.deepEqual((await listedGardens.json()).gardens, []);
+  assert.ok(database.prepare("SELECT COUNT(*) AS count FROM audit_events WHERE action IN ('CUSTOMER_PROFILE_UPDATED', 'GARDEN_CREATED', 'GARDEN_UPDATED', 'GARDEN_ARCHIVED')").get().count >= 4);
+
   const forbiddenAdmin = await render("/admin", {
     headers: { Cookie: sessionCookie },
     bindings: { DB: binding },
