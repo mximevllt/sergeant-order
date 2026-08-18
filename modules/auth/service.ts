@@ -1,4 +1,6 @@
-import { getRuntimeEnvironment, runtimeValue } from "@/config/runtime-environment";
+import { runtimeValue } from "@/config/runtime-environment";
+import { getDatabase } from "@/db/runtime";
+import type { AppDatabase, DatabaseResult, PreparedStatement } from "@/db/database";
 import {
   CUSTOMER_SESSION_TTL_SECONDS,
   STAFF_SESSION_TTL_SECONDS,
@@ -68,13 +70,6 @@ export class AuthDeliveryError extends Error {}
 export class InvalidMagicLinkError extends Error {}
 export class DisabledAccountError extends Error {}
 
-function getDatabase(): D1Database {
-  const env = getRuntimeEnvironment();
-  const database = env.DB;
-  if (!database) throw new AuthConfigurationError("AUTH_DATABASE_UNAVAILABLE");
-  return database;
-}
-
 function getAuthSecret(): string {
   const secret = runtimeValue("AUTH_SECRET");
   if (secret.length < 32) throw new AuthConfigurationError("AUTH_SECRET_UNAVAILABLE");
@@ -97,7 +92,7 @@ function canonicalOrigin(request: Request): string {
   const requestUrl = new URL(request.url);
   const allowedHost =
     ["localhost", "127.0.0.1", "[::1]"].includes(requestUrl.hostname) ||
-    requestUrl.hostname.endsWith(".chatgpt.site");
+    requestUrl.hostname.endsWith(".vercel.app");
   if (!allowedHost) throw new AuthConfigurationError("APP_URL_UNAVAILABLE");
   return requestUrl.origin;
 }
@@ -112,7 +107,7 @@ function assertEmailDeliveryAvailable(request: Request): void {
   }
 }
 
-async function provisionInitialAdmin(database: D1Database, email: string, ipHash: string): Promise<void> {
+async function provisionInitialAdmin(database: AppDatabase, email: string, ipHash: string): Promise<void> {
   const bootstrapEmail = normalizeEmail(runtimeValue("INITIAL_ADMIN_EMAIL"));
   if (!bootstrapEmail || bootstrapEmail !== email || !isValidEmail(bootstrapEmail)) return;
 
@@ -127,7 +122,7 @@ async function provisionInitialAdmin(database: D1Database, email: string, ipHash
   if (existing && !["INVITED", "ACTIVE"].includes(existing.status)) return;
 
   const userId = existing?.id ?? crypto.randomUUID();
-  const statements: D1PreparedStatement[] = [];
+  const statements: PreparedStatement[] = [];
   if (!existing) {
     statements.push(database.prepare(`
       INSERT INTO users (id, email, email_normalized, full_name, status)
@@ -339,7 +334,7 @@ export async function verifyMagicLink(request: Request, token: string): Promise<
   const sessionHash = await hashSecret(`session:${sessionToken}`, secret);
   const maxAgeSeconds = sessionKind === "STAFF" ? STAFF_SESSION_TTL_SECONDS : CUSTOMER_SESSION_TTL_SECONDS;
   const expiresAt = new Date(Date.now() + maxAgeSeconds * 1000).toISOString();
-  const statements: D1PreparedStatement[] = [
+  const statements: PreparedStatement[] = [
     database.prepare(`
       UPDATE magic_link_tokens SET used_at = CURRENT_TIMESTAMP
       WHERE id = ? AND used_at IS NULL AND unixepoch(expires_at) > unixepoch()
@@ -395,7 +390,7 @@ export async function verifyMagicLink(request: Request, token: string): Promise<
     ),
   );
 
-  let results: D1Result[];
+  let results: DatabaseResult[];
   try {
     results = await database.batch(statements);
   } catch (error) {

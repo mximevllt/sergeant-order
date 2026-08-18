@@ -1,8 +1,6 @@
-import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { createClient } from "@libsql/client";
+import { readFile } from "node:fs/promises";
 
-const projectRoot = fileURLToPath(new URL("../", import.meta.url));
-const wrangler = fileURLToPath(new URL("../node_modules/.bin/wrangler", import.meta.url));
 const environment = process.env.APP_ENV || "development";
 
 if (environment !== "development") {
@@ -10,17 +8,15 @@ if (environment !== "development") {
   process.exit(1);
 }
 
-function run(args) {
-  const result = spawnSync(wrangler, args, {
-    cwd: projectRoot,
-    env: process.env,
-    stdio: "inherit",
-  });
-  if (result.error) throw result.error;
-  if (result.status !== 0) process.exit(result.status ?? 1);
+const client = createClient({
+  url: process.env.TURSO_DATABASE_URL || "file:./sergeant-paysage.local.db",
+  authToken: process.env.TURSO_AUTH_TOKEN || undefined,
+});
+
+try {
+  const demoSql = await readFile(new URL("../db/seeds/demo.sql", import.meta.url), "utf8");
+  await client.executeMultiple(demoSql);
+  console.log("Jeu de démonstration SERGEANT PAYSAGE chargé dans la base locale.");
+} finally {
+  client.close();
 }
-
-run(["d1", "migrations", "apply", "DB", "--local", "--config", "wrangler.local.jsonc"]);
-run(["d1", "execute", "DB", "--local", "--config", "wrangler.local.jsonc", "--file", "db/seeds/demo.sql"]);
-
-console.log("Base locale prête avec le jeu de démonstration SERGEANT PAYSAGE.");

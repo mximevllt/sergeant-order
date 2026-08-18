@@ -9,9 +9,10 @@ function isLocalRequest(request: Request) {
 
 export async function GET(request: Request) {
   const local = isLocalRequest(request);
+  const environment = process.env.APP_ENV || "development";
   const report = inspectEnvironment(process.env, {
     allowDevelopmentDefaults: local,
-    requireIntegrations: local ? [] : "all",
+    requireIntegrations: local ? [] : environment === "staging" ? ["database", "authentication"] : "all",
   });
 
   return Response.json(

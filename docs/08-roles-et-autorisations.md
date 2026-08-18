@@ -70,7 +70,7 @@ Lors de la vérification :
 3. pour `STAFF`, le compte doit déjà exister et posséder au moins un rôle entreprise ;
 4. la session créée reprend l'audience du lien ;
 5. la destination est limitée au portail correspondant ;
-6. les rôles sont relus depuis D1 à chaque chargement de session.
+6. les rôles sont relus depuis libSQL à chaque chargement de session.
 
 Une connexion entreprise ne crée ni rôle `CUSTOMER` ni profil client. Inversement, une connexion client ne permet jamais d'obtenir une session `STAFF`.
 

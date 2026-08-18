@@ -1,4 +1,4 @@
-# Étape 05 — Base de données D1 et modèle métier
+# Étape 05 — Base de données libSQL et modèle métier
 
 Statut : **terminée dans le code**.
 
@@ -8,15 +8,15 @@ Elle ne remplace pas les étapes fonctionnelles suivantes : les pages utilisent 
 
 ## 1. Infrastructure retenue
 
-- Source de vérité structurée : Cloudflare D1.
+- Source de vérité structurée : Turso/libSQL.
 - Format : SQLite.
 - Couche typée : Drizzle ORM.
-- Liaison logique d'hébergement : `DB`.
+- Connexion d'hébergement : `TURSO_DATABASE_URL` et `TURSO_AUTH_TOKEN`.
 - Schéma source : `db/schema.ts`.
 - Migration initiale : `drizzle/0000_dear_gunslinger.sql`.
-- Fichiers binaires : jamais dans D1 ; seules leurs métadonnées sont prévues. Les octets seront stockés dans R2 à l'étape dédiée.
+- Fichiers binaires : jamais dans libSQL ; seules leurs métadonnées sont prévues. Les octets seront stockés dans Vercel Blob à l'étape dédiée.
 
-Le fichier d'hébergement déclare maintenant la liaison D1 `DB`. Les identifiants physiques de la base restent gérés par Sites et ne sont pas écrits dans le dépôt.
+Les identifiants physiques de la base sont injectés par les variables Vercel et ne sont jamais écrits dans le dépôt.
 
 ## 2. Conventions générales
 
@@ -123,7 +123,7 @@ Le fichier d'hébergement déclare maintenant la liaison D1 `DB`. Les identifian
 
 | Table | Responsabilité |
 |---|---|
-| `stored_files` | Métadonnées R2, empreinte, propriétaire et conservation |
+| `stored_files` | Métadonnées Vercel Blob, empreinte, propriétaire et conservation |
 | `notification_outbox` | Emails/SMS fiables, tentatives et reprise après panne |
 | `idempotency_keys` | Protection contre la répétition des opérations critiques |
 | `audit_events` | Journal de sécurité et métier append-only |
@@ -207,7 +207,7 @@ Le test `tests/database-schema.test.mjs` exécute réellement toute la migration
 9. l'utilisation d'un index métier par SQLite ;
 10. la présence des protections de facturation et de l'optimisation.
 
-La commande `npm run db:validate` permet d'exécuter uniquement ces contrôles. La suite générale les exécute également.
+La commande `pnpm db:validate` permet d'exécuter uniquement ces contrôles. La suite générale les exécute également.
 
 ## 7. Discipline de migration
 
@@ -221,8 +221,8 @@ La commande `npm run db:validate` permet d'exécuter uniquement ces contrôles. 
 ## 8. État à la fin de l'étape
 
 - la structure de données couvre le cycle complet, du compte client à la facture et au compte rendu ;
-- le code dispose d'un accès D1 centralisé via `getDb()` ;
-- la liaison logique `DB` est active dans la configuration Sites ;
+- le code dispose d'un accès libSQL centralisé via `getDb()` ;
+- l'adaptateur libSQL est compatible avec les fonctions Vercel et avec une base locale de développement ;
 - la migration structurelle initiale est versionnée et exécutable ;
 - les protections critiques sont vérifiées automatiquement ;
 - aucune donnée fictive n'est injectée dans une future base de production ;

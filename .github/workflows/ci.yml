@@ -1,0 +1,31 @@
+name: Vérifications
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      APP_ENV: development
+      APP_URL: http://localhost:3000
+      AUTH_SECRET: test-secret-sergeant-paysage-authentication-2026
+      EMAIL_DELIVERY_MODE: log
+      TURSO_DATABASE_URL: file:./sergeant-paysage.ci.db
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:migrate
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test

@@ -70,4 +70,15 @@ test("refuse les requêtes d'écriture provenant d'une autre origine", () => {
   });
   assert.equal(isSameOriginRequest(sameOrigin), true);
   assert.equal(isSameOriginRequest(crossOrigin), false);
+
+  const proxied = new Request("http://localhost:3000/api/auth/sign-out", {
+    method: "POST",
+    headers: {
+      Origin: "https://reservation.sergeant-paysage.fr",
+      Host: "localhost:3000",
+      "X-Forwarded-Host": "reservation.sergeant-paysage.fr",
+      "X-Forwarded-Proto": "https",
+    },
+  });
+  assert.equal(isSameOriginRequest(proxied), true);
 });

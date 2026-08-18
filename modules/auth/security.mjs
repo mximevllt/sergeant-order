@@ -70,7 +70,18 @@ export function safePortalReturnTo(value, audience = "CUSTOMER") {
 }
 
 export function isSameOriginRequest(request) {
-  const requestOrigin = new URL(request.url).origin;
+  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",", 1)[0]?.trim();
+  const host = forwardedHost || request.headers.get("host")?.trim();
+  const forwardedProtocol = request.headers.get("x-forwarded-proto")?.split(",", 1)[0]?.trim();
+  const requestUrl = new URL(request.url);
+  let requestOrigin = requestUrl.origin;
+  if (host) {
+    try {
+      requestOrigin = new URL(`${forwardedProtocol || requestUrl.protocol.replace(":", "")}://${host}`).origin;
+    } catch {
+      return false;
+    }
+  }
   const origin = request.headers.get("origin");
   if (origin) return origin === requestOrigin;
   const referer = request.headers.get("referer");
@@ -85,8 +96,6 @@ export function isSameOriginRequest(request) {
 }
 
 export function getClientIp(request) {
-  const cloudflareIp = request.headers.get("cf-connecting-ip")?.trim();
-  if (cloudflareIp) return cloudflareIp;
   return request.headers.get("x-forwarded-for")?.split(",", 1)[0]?.trim() || "unknown";
 }
 

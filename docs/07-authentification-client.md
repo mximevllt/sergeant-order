@@ -12,7 +12,7 @@ Les rôles entreprise et leurs politiques détaillées ont été ajoutés à l'�
 2. Il renseigne son email et, lors d'une première connexion, peut indiquer son nom complet.
 3. Le serveur normalise et valide les données, contrôle l'origine de la requête et applique la limitation de fréquence.
 4. Un jeton aléatoire valable dix minutes est créé.
-5. Seule son empreinte cryptographique est stockée dans D1.
+5. Seule son empreinte cryptographique est stockée dans libSQL.
 6. L'email contient le jeton original, qui n'existe qu'en mémoire pendant l'envoi.
 7. Le premier clic consomme le lien atomiquement.
 8. Si l'adresse est nouvelle, le compte, le rôle `CUSTOMER` et le profil client sont créés automatiquement.
@@ -23,7 +23,7 @@ Les rôles entreprise et leurs politiques détaillées ont été ajoutés à l'�
 
 ## 2. Choix technique final
 
-Le contrat initial prévoyait une bibliothèque d'authentification générique. L'implémentation finale utilise un module interne limité à ce parcours précis et directement raccordé aux tables D1 existantes.
+Le contrat initial prévoyait une bibliothèque d'authentification générique. L'implémentation finale utilise un module interne limité à ce parcours précis et directement raccordé aux tables libSQL existantes.
 
 Ce choix évite une deuxième série de tables d'identité et permet d'assurer explicitement les garanties demandées :
 
@@ -78,7 +78,7 @@ Des domaines HMAC distincts sont utilisés :
 - `session:` pour les cookies de session ;
 - `ip:` pour les adresses réseau utilisées par la limitation de fréquence.
 
-Une fuite en lecture de D1 ne suffit donc pas à réutiliser un lien ou une session active. Les journaux ne reçoivent jamais la valeur originale.
+Une fuite en lecture de libSQL ne suffit donc pas à réutiliser un lien ou une session active. Les journaux ne reçoivent jamais la valeur originale.
 
 ## 6. Durées et limitation de fréquence
 

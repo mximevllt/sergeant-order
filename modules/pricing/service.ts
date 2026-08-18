@@ -1,4 +1,4 @@
-import { getRuntimeEnvironment } from "@/config/runtime-environment";
+import { getDatabase } from "@/db/runtime";
 import { calculatePrice, recommendedHalfDays, type PricingInput, type PricingRule } from "./engine";
 
 export class PricingInputError extends Error {
@@ -12,12 +12,6 @@ type Estimate = {
   lines: ReturnType<typeof calculatePrice>;
   totals: { intervention: number; taskFee: number; detailFee: number; accessFee: number; evacuation: number; reduction: number; total: number; afterTax: number };
 };
-
-function database(): D1Database {
-  const db = getRuntimeEnvironment().DB;
-  if (!db) throw new Error("PRICING_DATABASE_UNAVAILABLE");
-  return db;
-}
 
 const enumValues = {
   lawnSurfaceBand: ["UNDER_100", "FROM_100_TO_250", "FROM_250_TO_500", "FROM_500_TO_1000", "OVER_1000"],
@@ -42,7 +36,7 @@ export async function estimatePrice(value: unknown): Promise<Estimate> {
   for (const field of ["customerPresence", "nearbyParking", "flexibleOnDay"] as const) if (typeof raw[field] !== "boolean") fields[field] = "Choix invalide.";
   if (Object.keys(fields).length) throw new PricingInputError(fields);
 
-  const db = database();
+  const db = getDatabase();
   const [version, taskRows] = await Promise.all([
     db.prepare(`SELECT id, version, label, currency, vat_rate_basis_points AS vatRateBasisPoints FROM pricing_versions WHERE status = 'ACTIVE' LIMIT 1`).first<Record<string, unknown>>(),
     db.prepare(`SELECT code FROM catalog_tasks WHERE active = 1`).all<{ code: string }>(),

@@ -1,4 +1,5 @@
-import { getRuntimeEnvironment } from "@/config/runtime-environment";
+import { getDatabase } from "@/db/runtime";
+import type { PreparedStatement } from "@/db/database";
 
 export type CustomerType = "INDIVIDUAL" | "PROFESSIONAL";
 export type TerrainSlope = "FLAT" | "GENTLE" | "STEEP" | "UNKNOWN";
@@ -46,12 +47,6 @@ export class CustomerInputError extends Error {
 
 export class CustomerConflictError extends Error {}
 export class CustomerNotFoundError extends Error {}
-
-function database(): D1Database {
-  const db = getRuntimeEnvironment().DB;
-  if (!db) throw new Error("CUSTOMER_DATABASE_UNAVAILABLE");
-  return db;
-}
 
 function textValue(value: unknown, max: number, required = false): string | null {
   if (typeof value !== "string") return required ? null : null;
@@ -111,7 +106,7 @@ function departmentCode(postalCode: string): string {
 }
 
 export async function getCustomerWorkspace(userId: string): Promise<{ profile: CustomerProfile; gardens: Garden[] }> {
-  const db = database();
+  const db = getDatabase();
   const [profileRow, gardensResult] = await Promise.all([
     db.prepare(`
       SELECT u.full_name AS fullName, u.email, u.phone,
@@ -195,8 +190,8 @@ export async function updateCustomerProfile(userId: string, input: unknown): Pro
   }
   if (Object.keys(fields).length) throw new CustomerInputError("PROFILE_INVALID", fields);
 
-  const db = database();
-  const statements: D1PreparedStatement[] = [
+  const db = getDatabase();
+  const statements: PreparedStatement[] = [
     db.prepare(`UPDATE users SET full_name = ?, phone = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(fullName, phone, userId),
     db.prepare(`
       INSERT INTO customer_profiles (user_id, customer_type) VALUES (?, ?)
@@ -259,7 +254,7 @@ function normalizeGarden(input: unknown): Omit<Garden, "id"> {
 
 export async function createGarden(userId: string, input: unknown): Promise<Garden> {
   const data = normalizeGarden(input);
-  const db = database();
+  const db = getDatabase();
   const gardenId = crypto.randomUUID();
   const addressId = crypto.randomUUID();
   await db.batch([
@@ -276,7 +271,7 @@ export async function createGarden(userId: string, input: unknown): Promise<Gard
 export async function updateGarden(userId: string, gardenId: string, input: unknown): Promise<Garden> {
   if (!/^[a-f0-9-]{20,50}$/iu.test(gardenId)) throw new CustomerNotFoundError("GARDEN_NOT_FOUND");
   const data = normalizeGarden(input);
-  const db = database();
+  const db = getDatabase();
   const owned = await db.prepare(`SELECT address_id AS addressId FROM gardens WHERE id = ? AND owner_user_id = ? AND archived_at IS NULL LIMIT 1`).bind(gardenId, userId).first<{ addressId: string }>();
   if (!owned) throw new CustomerNotFoundError("GARDEN_NOT_FOUND");
   await db.batch([
@@ -292,7 +287,7 @@ export async function updateGarden(userId: string, gardenId: string, input: unkn
 
 export async function archiveGarden(userId: string, gardenId: string): Promise<void> {
   if (!/^[a-f0-9-]{20,50}$/iu.test(gardenId)) throw new CustomerNotFoundError("GARDEN_NOT_FOUND");
-  const db = database();
+  const db = getDatabase();
   const exists = await db.prepare(`SELECT 1 AS found FROM gardens WHERE id = ? AND owner_user_id = ? AND archived_at IS NULL`).bind(gardenId, userId).first<{ found: number }>();
   if (!exists) throw new CustomerNotFoundError("GARDEN_NOT_FOUND");
   const results = await db.batch([

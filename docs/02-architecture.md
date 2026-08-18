@@ -53,7 +53,7 @@ Chaque module possède ses règles, ses validations et ses opérations serveur. 
 ### 3.1 Interface et exécution
 
 - Conservation du projet React existant et de ses routes.
-- Exécution serveur dans un Worker Cloudflare via OpenAI Sites.
+- Exécution serveur dans des fonctions Node.js via Vercel.
 - Pages publiques rendues sans connexion.
 - Pages client, terrain et entreprise protégées côté serveur.
 - Interface responsive unique ; aucune application mobile native n'est nécessaire au lancement.
@@ -62,9 +62,9 @@ Chaque module possède ses règles, ses validations et ses opérations serveur. 
 
 ### 3.2 Base de données
 
-Choix : **Cloudflare D1 avec SQLite et Drizzle**.
+Choix : **Turso/libSQL avec SQLite et Drizzle**.
 
-D1 sera la source de vérité pour :
+libSQL sera la source de vérité pour :
 
 - utilisateurs et sessions ;
 - clients, professionnels et jardins ;
@@ -90,9 +90,9 @@ Principes :
 
 ### 3.3 Fichiers
 
-Choix : **Cloudflare R2**, dans un espace privé.
+Choix : **Vercel Blob**, dans un espace privé.
 
-R2 contiendra :
+Vercel Blob contiendra :
 
 - photos transmises pendant la réservation ;
 - photos avant/après ;
@@ -101,7 +101,7 @@ R2 contiendra :
 - exports administratifs ;
 - pièces jointes autorisées.
 
-D1 conservera uniquement les métadonnées : propriétaire, type, taille, empreinte, date, commande liée et règles de conservation.
+libSQL conservera uniquement les métadonnées : propriétaire, type, taille, empreinte, date, commande liée et règles de conservation.
 
 Les fichiers privés ne seront jamais servis par une adresse publique permanente. Une route autorisée vérifiera l'identité et le rattachement avant lecture. Les téléversements seront limités en nombre, taille et format ; le type réel du fichier sera contrôlé et les métadonnées photographiques sensibles seront supprimées lorsque cela est possible.
 
@@ -109,9 +109,9 @@ Les fichiers privés ne seront jamais servis par une adresse publique permanente
 
 ### 4.1 Solution retenue
 
-Choix final d'implémentation : **module d'authentification intégré au monolithe, stockage D1, liens à usage unique et envoi par Resend**.
+Choix final d'implémentation : **module d'authentification intégré au monolithe, stockage libSQL, liens à usage unique et envoi par Resend**.
 
-Le module intégré conserve uniquement des empreintes HMAC des liens et des sessions dans D1, utilise exactement le modèle de données métier et évite une seconde série de tables d'identité. Le comportement utilisateur validé reste identique à celui prévu : connexion sans mot de passe, compte automatique et sessions révocables.
+Le module intégré conserve uniquement des empreintes HMAC des liens et des sessions dans libSQL, utilise exactement le modèle de données métier et évite une seconde série de tables d'identité. Le comportement utilisateur validé reste identique à celui prévu : connexion sans mot de passe, compte automatique et sessions révocables.
 
 Cette solution permet :
 
@@ -160,10 +160,10 @@ L'Avance immédiate n'est proposée qu'aux particuliers éligibles.
 
 | Besoin | Solution | Rôle |
 |---|---|---|
-| Hébergement applicatif | OpenAI Sites / Cloudflare Worker | Exécution du site |
-| Données structurées | Cloudflare D1 | Source de vérité métier |
-| Photos et documents | Cloudflare R2 | Fichiers privés |
-| Authentification | Module interne + D1 | Sessions et liens de connexion hachés |
+| Hébergement applicatif | Vercel / Next.js | Exécution du site |
+| Données structurées | Turso/libSQL | Source de vérité métier |
+| Photos et documents | Vercel Blob | Fichiers privés |
+| Authentification | Module interne + libSQL | Sessions et liens de connexion hachés |
 | Emails | Resend | Connexion, confirmation, rappel, facture |
 | Paiement par carte | Stripe | Carte enregistrée et débit après intervention |
 | Avance immédiate | API Urssaf Tiers de prestation | Inscription et demandes de paiement AICI |
@@ -340,7 +340,7 @@ Pour un paiement normal :
 1. création ou récupération du client Stripe ;
 2. création d'un SetupIntent prévu pour un usage ultérieur hors session ;
 3. authentification bancaire éventuelle pendant la réservation ;
-4. enregistrement côté D1 des identifiants Stripe, jamais du numéro de carte ;
+4. enregistrement côté libSQL des identifiants Stripe, jamais du numéro de carte ;
 5. confirmation de la commande après événement Stripe valide.
 
 Le texte contractuel recueille l'autorisation de conserver le moyen de paiement et de débiter le montant déterminé selon la réservation.
@@ -577,16 +577,16 @@ flowchart LR
 
 | Information | Source de vérité |
 |---|---|
-| Identité connectée | Module d'authentification + D1 |
-| Profil et jardins | D1 |
-| Photos et PDF | R2, métadonnées D1 |
-| Catalogue et tarifs | D1, version publiée |
-| Prix d'une commande | Instantané de devis D1 |
-| Disponibilité | Planning, verrous et commandes D1 |
+| Identité connectée | Module d'authentification + libSQL |
+| Profil et jardins | libSQL |
+| Photos et PDF | Vercel Blob, métadonnées libSQL |
+| Catalogue et tarifs | libSQL, version publiée |
+| Prix d'une commande | Instantané de devis libSQL |
+| Disponibilité | Planning, verrous et commandes libSQL |
 | Résultat bancaire | Événements Stripe signés |
-| Statut AICI | API Urssaf + historique D1 |
-| Mission réalisée | Compte rendu D1 + photos R2 |
-| Facture | Enregistrement immuable D1 + PDF R2 |
+| Statut AICI | API Urssaf + historique libSQL |
+| Mission réalisée | Compte rendu libSQL + photos Vercel Blob |
+| Facture | Enregistrement immuable libSQL + PDF Vercel Blob |
 | Interface affichée | Lecture des sources ci-dessus, jamais données fictives |
 
 ## 18. Cohérence, reprise et idempotence
@@ -624,7 +624,7 @@ Chaque processus externe conserve son état, ses tentatives et sa dernière erre
 - Limitation de fréquence des connexions, devis, fichiers et paiements.
 - Protection anti-robot sur les formulaires exposés aux abus.
 - Politique de sécurité du navigateur et en-têtes adaptés.
-- Accès R2 soumis à autorisation.
+- Accès Vercel Blob soumis à autorisation.
 - Journal d'audit append-only pour prix, commandes, planning, paiements et factures.
 - Exports et suppressions RGPD contrôlés.
 - Sauvegardes et tests de restauration.
@@ -664,13 +664,13 @@ Les alertes doivent être actionnables et ne doivent pas contenir de données se
 
 ### 21.2 Tests d'intégration
 
-- migrations D1 ;
+- migrations libSQL ;
 - contraintes de créneau ;
 - création complète d'une commande ;
 - traitement et répétition des webhooks ;
 - Stripe en environnement de test ;
 - Urssaf en environnement de test lorsque les accès sont disponibles ;
-- fichiers R2 privés ;
+- fichiers Vercel Blob privés ;
 - émission d'une facture et d'un avoir.
 
 ### 21.3 Tests de parcours
@@ -703,9 +703,9 @@ Structure cible :
 - `modules/aici/` : Urssaf ;
 - `modules/invoicing/` : factures, avoirs et fiscalité ;
 - `modules/notifications/` : emails et boîte d'envoi ;
-- `modules/files/` : R2 et autorisations ;
+- `modules/files/` : Vercel Blob et autorisations ;
 - `modules/audit/` : événements de sécurité et métier ;
-- `db/` : schéma et accès D1 ;
+- `db/` : schéma et accès libSQL ;
 - `drizzle/` : migrations versionnées ;
 - `tests/` : tests unitaires, intégration et parcours.
 
@@ -764,13 +764,13 @@ L'absence d'un accès externe n'empêchera pas de construire l'adaptateur et les
 | Décision | Choix retenu | Motif |
 |---|---|---|
 | Forme du système | Monolithe modulaire | Cohérence et exploitation simple |
-| Base | D1 / SQLite | Intégration native au site et relations suffisantes |
-| Fichiers | R2 privé | Photos et documents hors base |
-| Auth client | Magic link interne sur D1 | Compte automatique sans mot de passe et aucun jeton en clair en base |
+| Base | libSQL / SQLite | Intégration native au site et relations suffisantes |
+| Fichiers | Vercel Blob privé | Photos et documents hors base |
+| Auth client | Magic link interne sur libSQL | Compte automatique sans mot de passe et aucun jeton en clair en base |
 | Paiement | Stripe SetupIntent + débit ultérieur | Conforme au paiement après prestation |
 | Crédit immédiat | API Urssaf Tiers de prestation | Parcours officiel de l'entreprise prestataire |
 | Adresse | Géoplateforme | Référentiel français actuel |
-| Email | Resend | Compatible avec l'exécution Cloudflare |
+| Email | Resend | Compatible avec l'exécution Vercel |
 | Facture | Registre interne immuable + adaptateur PA | B2C, B2B et réforme électronique |
 | Planning | Interne, deux équipes, verrous en base | Une seule source de disponibilité |
 | Architecture distribuée | Refusée au lancement | Complexité injustifiée |

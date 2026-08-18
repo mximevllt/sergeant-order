@@ -2,7 +2,7 @@
 
 Statut : **terminée dans le code**.
 
-Cette étape fixe les frontières entre le développement, la préproduction et la production. Elle ne crée pas encore les bases D1, les espaces R2, les comptes clients ni les connexions Stripe et Urssaf : ces ressources et intégrations ont leurs propres étapes. Elle garantit en revanche qu'elles ne pourront pas être branchées indistinctement.
+Cette étape fixe les frontières entre le développement, la préproduction et la production. Elle ne crée pas encore les bases libSQL, les espaces Vercel Blob, les comptes clients ni les connexions Stripe et Urssaf : ces ressources et intégrations ont leurs propres étapes. Elle garantit en revanche qu'elles ne pourront pas être branchées indistinctement.
 
 ## 1. Les trois environnements
 
@@ -49,6 +49,11 @@ Les groupes sont contrôlés comme des ensembles : dès qu'une variable d'un gro
 - `AUTH_SECRET` : empreinte cryptographique des sessions, adresses réseau et liens de connexion.
 - `INITIAL_ADMIN_EMAIL` : adresse nominative autorisée à créer l'unique premier administrateur lorsqu'aucun rôle `ADMIN` n'existe encore.
 
+### Base de données
+
+- `TURSO_DATABASE_URL` : URL `file:` en développement ou `libsql://` sur Turso ;
+- `TURSO_AUTH_TOKEN` : jeton secret obligatoire avec une base Turso distante.
+
 ### Emails transactionnels
 
 - `RESEND_API_KEY` : clé serveur Resend ;
@@ -83,14 +88,14 @@ Ces services restent facultatifs pendant le développement, mais doivent être c
 
 | Ressource | Développement | Préproduction | Production |
 |---|---|---|---|
-| Base D1 | Base locale | Base D1 dédiée recette | Base D1 dédiée réelle |
-| Fichiers R2 | Stockage local | Bucket dédié recette | Bucket privé dédié réel |
+| Base libSQL | Base locale | Base libSQL dédiée recette | Base libSQL dédiée réelle |
+| Fichiers Vercel Blob | Stockage local | Bucket dédié recette | Bucket privé dédié réel |
 | Webhook Stripe | Endpoint et secret test | Endpoint et secret test dédiés | Endpoint et secret live dédiés |
 | Webhook Urssaf | Simulateur/test | Endpoint de recette | Endpoint réel |
 | Domaine | `localhost` | Sous-domaine de recette non indexé | Domaine public final |
 | Emails | Journal local | Domaine ou flux de test | Domaine expéditeur vérifié |
 
-Les identifiants physiques de D1 et R2 ne sont pas écrits manuellement dans `.openai/hosting.json`. Le fichier conserve le projet Sites et ses noms de liaisons logiques ; l'hébergement gère les ressources physiques.
+Les identifiants physiques de libSQL et Vercel Blob ne sont pas écrits dans `vercel.json`. Ils sont enregistrés dans le coffre de variables de Vercel, séparément pour Preview et Production.
 
 ## 6. Contrôles automatiques ajoutés
 
@@ -108,9 +113,9 @@ Le module `config/environment.mjs` réalise les contrôles suivants sans renvoye
 
 Commandes disponibles :
 
-- `npm run env:check` : contrôle quotidien de la configuration locale ;
-- `npm run env:check:all` : contrôle de mise en service, exigeant toutes les intégrations ;
-- `npm run check` : inclut désormais le contrôle d'environnement avant les contrôles de code et les tests.
+- `pnpm env:check` : contrôle quotidien de la configuration locale ;
+- `pnpm env:check:all` : contrôle de mise en service, exigeant toutes les intégrations ;
+- `pnpm check` : inclut le contrôle d'environnement avant les contrôles de code et les tests.
 
 Six tests automatiques couvrent les valeurs locales sûres, les exigences de préproduction, les modes de production, les groupes partiels, le cloisonnement des clés Stripe et l'absence de fuite des secrets dans les rapports.
 
@@ -141,6 +146,6 @@ Il est interdit de copier des données clients réelles vers la préproduction. 
 - la configuration locale est exploitable sans service réel ;
 - les modèles de préproduction et de production sont prêts à recevoir leurs valeurs dans le coffre de secrets de l'hébergement ;
 - le code sait détecter un mélange dangereux entre environnements ;
-- les futurs branchements D1, R2, authentification, Resend, Stripe, Urssaf, Sentry et Turnstile disposent de noms stables ;
+- les futurs branchements libSQL, Vercel Blob, authentification, Resend, Stripe, Urssaf, Sentry et Turnstile disposent de noms stables ;
 - aucune clé réelle n'a été demandée, enregistrée ou exposée pendant cette étape ;
 - les ressources distantes seront créées au moment de leurs étapes dédiées, afin d'éviter une infrastructure vide ou mal liée.

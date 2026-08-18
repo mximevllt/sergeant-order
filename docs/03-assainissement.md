@@ -9,7 +9,7 @@ Cette étape remet la maquette sur une base de développement fiable sans transf
 ## Situation initiale reproductible
 
 - Qualité : 21 erreurs et 11 avertissements.
-- Typage : 3 erreurs liées aux contrats d'exécution Cloudflare manquants.
+- Typage : 3 erreurs liées aux contrats d'exécution Vercel manquants.
 - Tests : 2 tests obsolètes vérifiaient encore le squelette de démarrage supprimé.
 - Navigation : plusieurs liens internes contournaient la navigation applicative et des liens `#` ne menaient nulle part.
 - React : deux effets mettaient à jour un état dérivé de manière synchrone.
@@ -24,7 +24,7 @@ Cette étape remet la maquette sur une base de développement fiable sans transf
 - Mise à jour automatique de la durée et des priorités déplacée dans les actions utilisateur pertinentes.
 - Association incorrecte d'un libellé de formulaire corrigée.
 - Boutons explicitement typés pour éviter des soumissions involontaires futures.
-- Contrats TypeScript minimaux de l'environnement Cloudflare ajoutés.
+- Contrats TypeScript de l'environnement serveur ajoutés.
 - Fichier de construction incrémentale ignoré par le suivi de sources.
 - Scripts `typecheck` et `check` ajoutés au projet.
 - Dossier vide du squelette supprimé.

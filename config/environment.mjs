@@ -13,6 +13,7 @@ export const CORE_VARIABLES = Object.freeze([
 export const OPTIONAL_VARIABLES = Object.freeze(["INITIAL_ADMIN_EMAIL"]);
 
 export const SECRET_VARIABLES = Object.freeze([
+  "TURSO_AUTH_TOKEN",
   "AUTH_SECRET",
   "RESEND_API_KEY",
   "STRIPE_SECRET_KEY",
@@ -24,6 +25,7 @@ export const SECRET_VARIABLES = Object.freeze([
 ]);
 
 export const INTEGRATION_GROUPS = Object.freeze({
+  database: ["TURSO_DATABASE_URL", "TURSO_AUTH_TOKEN"],
   authentication: ["AUTH_SECRET"],
   transactionalEmail: ["RESEND_API_KEY", "RESEND_FROM_EMAIL"],
   payments: [
@@ -189,7 +191,8 @@ export function inspectEnvironment(source = {}, options = {}) {
   for (const [name, keys] of Object.entries(INTEGRATION_GROUPS)) {
     const configuredKeys = keys.filter((key) => Boolean(values[key]));
     const configured = configuredKeys.length > 0;
-    const complete = configuredKeys.length === keys.length;
+    const localDatabase = name === "database" && environment === "development" && values.TURSO_DATABASE_URL.startsWith("file:");
+    const complete = localDatabase || configuredKeys.length === keys.length;
     const isRequired = required.includes(name);
     integrations[name] = { configured, complete, required: isRequired };
 

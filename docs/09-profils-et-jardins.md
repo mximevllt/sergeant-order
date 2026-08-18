@@ -2,7 +2,7 @@
 
 ## Résultat fonctionnel
 
-L’espace client utilise désormais D1 comme source de vérité. Un client connecté peut modifier son nom et son téléphone, choisir un compte particulier ou professionnel, enregistrer les informations de facturation d’une entreprise et gérer plusieurs jardins.
+L’espace client utilise désormais libSQL comme source de vérité. Un client connecté peut modifier son nom et son téléphone, choisir un compte particulier ou professionnel, enregistrer les informations de facturation d’une entreprise et gérer plusieurs jardins.
 
 Chaque jardin comprend une adresse française, une surface indicative, l’inclinaison, la largeur d’accès, la présence éventuelle d’animaux et des consignes non sensibles. La suppression depuis l’interface est un archivage : l’historique n’est pas détruit et le jardin n’est plus proposé au client.
 

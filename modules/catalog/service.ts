@@ -1,4 +1,4 @@
-import { getRuntimeEnvironment } from "@/config/runtime-environment";
+import { getDatabase } from "@/db/runtime";
 
 export type PublicCatalogTask = {
   code: string;
@@ -15,14 +15,8 @@ export type PublicCatalog = {
   pricing: { version: number; label: string; halfDayTtcCents: number; vatRateBasisPoints: number; currency: string };
 };
 
-function database(): D1Database {
-  const db = getRuntimeEnvironment().DB;
-  if (!db) throw new Error("CATALOG_DATABASE_UNAVAILABLE");
-  return db;
-}
-
 export async function getPublicCatalog(): Promise<PublicCatalog> {
-  const db = database();
+  const db = getDatabase();
   const [service, taskRows, pricing] = await Promise.all([
     db.prepare(`SELECT id, code, name, description FROM catalog_services WHERE kind = 'ONE_OFF' AND active = 1 ORDER BY sort_order LIMIT 1`).first<{ id: string; code: string; name: string; description: string }>(),
     db.prepare(`

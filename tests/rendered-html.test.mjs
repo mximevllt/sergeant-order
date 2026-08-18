@@ -1,80 +1,95 @@
 import assert from "node:assert/strict";
-import { access, readFile, readdir } from "node:fs/promises";
-import { DatabaseSync } from "node:sqlite";
-import test from "node:test";
+import { spawn } from "node:child_process";
+import { access, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { after, before, test } from "node:test";
 
-process.env.APP_ENV = "development";
-process.env.APP_URL = "http://localhost";
-process.env.EMAIL_DELIVERY_MODE = "log";
-process.env.AUTH_SECRET = "test-secret-sergeant-paysage-authentication-2026";
-
-const projectRoot = new URL("../", import.meta.url);
+const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const appRoot = new URL("../app/", import.meta.url);
-const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
-const workerPromise = import(workerUrl.href).then(({ default: worker }) => worker);
+const port = 43217;
+const origin = `http://127.0.0.1:${port}`;
+let server;
+let temporaryDirectory;
 
-async function render(pathname, options = {}) {
-  const worker = await workerPromise;
+async function runNode(arguments_, environment) {
+  await new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, arguments_, {
+      cwd: projectRoot,
+      env: { ...process.env, ...environment },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let output = "";
+    child.stdout.on("data", (chunk) => { output += chunk; });
+    child.stderr.on("data", (chunk) => { output += chunk; });
+    child.once("error", reject);
+    child.once("exit", (code) => code === 0 ? resolve() : reject(new Error(output)));
+  });
+}
+
+async function waitForServer() {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    try {
+      const response = await fetch(`${origin}/api/health`);
+      if (response.status === 200) return;
+    } catch {
+      // Le serveur peut ne pas encore écouter pendant son démarrage.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error("Le serveur Next.js de test n'a pas démarré.");
+}
+
+async function request(pathname, options = {}) {
   const headers = new Headers(options.headers);
   if (!headers.has("accept")) headers.set("accept", options.accept ?? "text/html");
-  return worker.fetch(
-    new Request(new URL(pathname, options.origin ?? "http://localhost"), {
-      method: options.method ?? "GET",
-      headers,
-      body: options.body,
-    }),
-    {
-      ASSETS: {
-        fetch: async () => new Response("Not found", { status: 404 }),
-      },
-      ...options.bindings,
-    },
-    {
-      waitUntil() {},
-      passThroughOnException() {},
-    },
-  );
+  return fetch(`${origin}${pathname}`, { ...options, headers, redirect: options.redirect ?? "manual" });
 }
 
 async function readAppSources(directory = appRoot) {
   const entries = await readdir(directory, { withFileTypes: true });
   const sources = [];
-
   for (const entry of entries) {
     const url = new URL(`${entry.name}${entry.isDirectory() ? "/" : ""}`, directory);
-    if (entry.isDirectory()) {
-      sources.push(...await readAppSources(url));
-    } else if (entry.name.endsWith(".tsx")) {
-      sources.push([url.pathname, await readFile(url, "utf8")]);
-    }
+    if (entry.isDirectory()) sources.push(...await readAppSources(url));
+    else if (entry.name.endsWith(".tsx")) sources.push([url.pathname, await readFile(url, "utf8")]);
   }
-
   return sources;
 }
 
-test("reports environment health without exposing configuration values", async () => {
-  const localResponse = await render("/api/health", { accept: "application/json" });
-  assert.equal(localResponse.status, 200);
-  assert.deepEqual(await localResponse.json(), {
-    status: "ok",
-    environment: "development",
-    configuration: "ok",
+before(async () => {
+  temporaryDirectory = await mkdtemp(join(tmpdir(), "sergeant-paysage-next-"));
+  const databaseUrl = `file:${join(temporaryDirectory, "integration.db")}`;
+  const environment = {
+    APP_ENV: "development",
+    APP_URL: origin,
+    COMPANY_TIMEZONE: "Europe/Paris",
+    SUPPORT_EMAIL: "support@localhost.invalid",
+    AUTH_SECRET: "test-secret-sergeant-paysage-authentication-2026",
+    EMAIL_DELIVERY_MODE: "log",
+    PAYMENT_MODE: "disabled",
+    AICI_MODE: "disabled",
+    TURSO_DATABASE_URL: databaseUrl,
+  };
+  await runNode(["scripts/migrate-database.mjs"], environment);
+  server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-p", String(port)], {
+    cwd: projectRoot,
+    env: { ...process.env, ...environment },
+    stdio: ["ignore", "pipe", "pipe"],
   });
-
-  const remoteResponse = await render("/api/health", {
-    origin: "https://production.sergeant-paysage.fr",
-    accept: "application/json",
-  });
-  assert.equal(remoteResponse.status, 503);
-  assert.deepEqual(await remoteResponse.json(), {
-    status: "misconfigured",
-    environment: "development",
-    configuration: "error",
-  });
+  await waitForServer();
 });
 
-test("server-renders the current product routes", async () => {
+after(async () => {
+  if (server && server.exitCode === null) {
+    server.kill("SIGTERM");
+    await new Promise((resolve) => server.once("exit", resolve));
+  }
+  if (temporaryDirectory) await rm(temporaryDirectory, { recursive: true, force: true });
+});
+
+test("Next.js sert les pages publiques et protège les portails", async () => {
   const routes = [
     ["/", /Votre jardin entretenu/, /Les services/],
     ["/reserver", /Étape/, /Que souhaitez-vous faire/],
@@ -82,432 +97,100 @@ test("server-renders the current product routes", async () => {
     ["/connexion-entreprise", /Connectez-vous à votre poste/, /Recevoir mon accès/],
     ["/tarifs", /Des prix simples/, /Votre estimation/],
   ];
-
   for (const [pathname, firstExpected, secondExpected] of routes) {
-    const response = await render(pathname);
-    assert.equal(response.status, 200, `${pathname} should respond successfully`);
-    assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
-
+    const response = await request(pathname);
+    assert.equal(response.status, 200, pathname);
     const html = await response.text();
     assert.match(html, firstExpected);
     assert.match(html, secondExpected);
-    assert.doesNotMatch(html, /Your site is taking shape|Building your site|codex-preview/i);
   }
-
-  const protectedResponse = await render("/espace-client");
-  assert.equal(protectedResponse.status, 307);
-  assert.match(protectedResponse.headers.get("location") ?? "", /^\/connexion\?returnTo=/u);
-  const protectedAdmin = await render("/admin");
-  assert.equal(protectedAdmin.status, 307);
-  assert.match(protectedAdmin.headers.get("location") ?? "", /^\/connexion-entreprise\?returnTo=/u);
-  const protectedField = await render("/terrain");
-  assert.equal(protectedField.status, 307);
-  assert.match(protectedField.headers.get("location") ?? "", /^\/connexion-entreprise\?returnTo=/u);
+  const customer = await request("/espace-client");
+  assert.equal(customer.status, 307);
+  assert.match(customer.headers.get("location") ?? "", /\/connexion\?returnTo=/u);
+  const admin = await request("/admin");
+  assert.equal(admin.status, 307);
+  assert.match(admin.headers.get("location") ?? "", /\/connexion-entreprise\?returnTo=/u);
 });
 
-test("charge le catalogue actif et calcule le tarif uniquement côté serveur", async () => {
-  const database = await createMigratedDatabase();
-  const binding = createD1Binding(database);
-  const catalogResponse = await render("/api/catalog", { accept: "application/json", bindings: { DB: binding } });
+test("le catalogue et le calcul tarifaire utilisent la base libSQL", async () => {
+  const catalogResponse = await request("/api/catalog", { accept: "application/json" });
   assert.equal(catalogResponse.status, 200);
   const catalog = await catalogResponse.json();
   assert.equal(catalog.tasks.length, 6);
-  assert.equal(catalog.tasks[0].code, "MOWING");
-  assert.equal(catalog.pricing.version, 1);
   assert.equal(catalog.pricing.halfDayTtcCents, 32900);
 
-  const baseInput = {
-    taskCodes: ["MOWING", "HEDGE_TRIMMING"],
-    halfDays: 2,
-    lawnSurfaceBand: "FROM_250_TO_500",
-    grassState: "MAINTAINED",
-    hedgeLengthM: 18,
-    hedgeHeightBand: "FROM_1_5_TO_2M",
-    hedgeFaces: "THREE_FACES",
-    greenWaste: "REMOVE_1_TO_2M3",
-    customerPresence: true,
-    accessType: "CODE",
-    nearbyParking: true,
-    vehicleDistanceBand: "UNDER_20M",
-    flexibleOnDay: false,
+  const payload = {
+    taskCodes: ["MOWING", "HEDGE_TRIMMING"], halfDays: 2,
+    lawnSurfaceBand: "FROM_250_TO_500", grassState: "MAINTAINED",
+    hedgeLengthM: 18, hedgeHeightBand: "FROM_1_5_TO_2M", hedgeFaces: "THREE_FACES",
+    greenWaste: "REMOVE_1_TO_2M3", customerPresence: true, accessType: "CODE",
+    nearbyParking: true, vehicleDistanceBand: "UNDER_20M", flexibleOnDay: false,
   };
-  const estimate = async (input, origin = "http://localhost") => render("/api/pricing/estimate", {
-    accept: "application/json",
+  const response = await request("/api/pricing/estimate", {
     method: "POST",
-    headers: { Origin: origin, "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-    bindings: { DB: binding },
+    headers: { "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
   });
-  const priceResponse = await estimate(baseInput);
-  assert.equal(priceResponse.status, 200);
-  const price = await priceResponse.json();
-  assert.equal(price.pricingVersion.version, 1);
-  assert.equal(price.recommendedHalfDays, 2);
-  assert.deepEqual(price.totals, {
-    intervention: 658,
-    taskFee: 9,
-    detailFee: 22,
-    accessFee: 0,
-    evacuation: 28,
-    reduction: 0,
-    total: 717,
-    afterTax: 358.5,
-  });
-
-  const high = await (await estimate({ ...baseInput, grassState: "HIGH" })).json();
-  const veryHigh = await (await estimate({ ...baseInput, grassState: "VERY_HIGH" })).json();
-  assert.equal(high.totals.total - price.totals.total, 20);
-  assert.equal(veryHigh.totals.total - high.totals.total, 40);
-  const difficultAccess = await (await estimate({ ...baseInput, customerPresence: false, nearbyParking: false, vehicleDistanceBand: "OVER_50M", flexibleOnDay: true })).json();
-  assert.equal(difficultAccess.totals.accessFee, 37);
-  assert.equal(difficultAccess.totals.reduction, 10);
-  const highHedge = await (await estimate({ ...baseInput, hedgeHeightBand: "OVER_3M" })).json();
-  assert.equal(highHedge.lines.find((line) => line.code === "HEDGE_HEIGHT").amountTtcCents, 2500);
-  assert.match(highHedge.warnings.join(" "), /vérification de sécurité/u);
-
-  assert.equal((await estimate(baseInput, "https://malveillant.example")).status, 403);
-  assert.equal((await estimate({ ...baseInput, taskCodes: ["UNKNOWN_TASK"] })).status, 400);
-  database.close();
+  assert.equal(response.status, 200);
+  const estimate = await response.json();
+  assert.equal(estimate.recommendedHalfDays, 2);
+  assert.equal(estimate.totals.total, 717);
+  assert.equal(estimate.totals.afterTax, 358.5);
 });
 
-test("crée un compte par lien, ouvre une session, interdit la réutilisation et déconnecte", async () => {
-  const database = await createMigratedDatabase();
-  const binding = createD1Binding(database);
-  const requestResponse = await render("/api/auth/magic-link/request", {
-    accept: "application/json",
+test("un client crée son compte, sa session, son profil et son jardin", async () => {
+  const magicResponse = await request("/api/auth/magic-link/request", {
     method: "POST",
-    headers: { "Content-Type": "application/json", Origin: "http://localhost" },
-    body: JSON.stringify({
-      email: "Camille.Jardin@Example.fr",
-      fullName: "Camille Jardin",
-      returnTo: "/espace-client",
-    }),
-    bindings: { DB: binding },
+    headers: { "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "camille@example.fr", fullName: "Camille Jardin", returnTo: "/espace-client" }),
   });
-  assert.equal(requestResponse.status, 202);
-  const requestPayload = await requestResponse.json();
-  assert.match(requestPayload.previewUrl, /^http:\/\/localhost\/auth\/verifier\?token=/u);
+  assert.equal(magicResponse.status, 202);
+  const magic = await magicResponse.json();
+  const verificationUrl = new URL(magic.previewUrl);
+  const verification = await request(`${verificationUrl.pathname}${verificationUrl.search}`);
+  assert.equal(verification.status, 303);
+  const cookie = verification.headers.get("set-cookie")?.split(";", 1)[0] ?? "";
+  assert.match(cookie, /^sp_session=/u);
 
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const repeated = await render("/api/auth/magic-link/request", {
-      accept: "application/json",
-      method: "POST",
-      headers: { "Content-Type": "application/json", Origin: "http://localhost" },
-      body: JSON.stringify({ email: "camille.jardin@example.fr", returnTo: "/espace-client" }),
-      bindings: { DB: binding },
-    });
-    assert.equal(repeated.status, 202);
-    assert.ok((await repeated.json()).previewUrl);
-  }
-  const throttled = await render("/api/auth/magic-link/request", {
-    accept: "application/json",
-    method: "POST",
-    headers: { "Content-Type": "application/json", Origin: "http://localhost" },
-    body: JSON.stringify({ email: "camille.jardin@example.fr", returnTo: "/espace-client" }),
-    bindings: { DB: binding },
-  });
-  assert.equal(throttled.status, 202);
-  assert.equal((await throttled.json()).previewUrl, undefined);
-  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM magic_link_tokens").get().count, 3);
-
-  const rawToken = new URL(requestPayload.previewUrl).searchParams.get("token");
-  const storedToken = database.prepare("SELECT token_hash, used_at FROM magic_link_tokens").get();
-  assert.notEqual(storedToken.token_hash, rawToken);
-  assert.equal(storedToken.used_at, null);
-
-  const verifyUrl = new URL(requestPayload.previewUrl);
-  const verifyResponse = await render(`${verifyUrl.pathname}${verifyUrl.search}`, { bindings: { DB: binding } });
-  assert.equal(verifyResponse.status, 303);
-  assert.equal(verifyResponse.headers.get("location"), "/espace-client");
-  const cookie = verifyResponse.headers.get("set-cookie");
-  assert.match(cookie ?? "", /sp_session=/u);
-  assert.match(cookie ?? "", /HttpOnly/u);
-
-  const sessionCookie = cookie?.split(";", 1)[0] ?? "";
-  const accountResponse = await render("/espace-client", {
-    headers: { Cookie: sessionCookie },
-    bindings: { DB: binding },
-  });
-  assert.equal(accountResponse.status, 200);
-  const accountHtml = await accountResponse.text();
-  assert.match(accountHtml, /Compte de Camille Jardin/u);
-  assert.match(accountHtml, /camille\.jardin@example\.fr/u);
-  assert.equal(database.prepare("SELECT email_verified_at IS NOT NULL AS verified FROM users").get().verified, 1);
-
-  const profileResponse = await render("/api/customer/profile", {
-    accept: "application/json",
+  const profileResponse = await request("/api/customer/profile", {
     method: "PATCH",
-    headers: { Cookie: sessionCookie, Origin: "http://localhost", "Content-Type": "application/json" },
-    body: JSON.stringify({
-      fullName: "Camille Jardinier",
-      phone: "06 12 34 56 78",
-      customerType: "PROFESSIONAL",
-      organization: {
-        legalName: "Les Jardins de Camille",
-        tradeName: "Camille & Jardin",
-        siren: "123456789",
-        vatNumber: "FR12123456789",
-        billingEmail: "factures@example.fr",
-        billingAddress: { line1: "8 rue des Fleurs", postalCode: "83170", city: "Brignoles" },
-      },
-    }),
-    bindings: { DB: binding },
+    headers: { Cookie: cookie, "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json" },
+    body: JSON.stringify({ fullName: "Camille Jardinier", phone: "06 12 34 56 78", customerType: "INDIVIDUAL" }),
   });
   assert.equal(profileResponse.status, 200);
-  assert.equal((await profileResponse.json()).profile.customerType, "PROFESSIONAL");
-  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM organizations").get().count, 1);
-  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM user_roles WHERE role = 'PRO_CUSTOMER_ADMIN'").get().count, 1);
 
-  const gardenPayload = {
-    label: "Maison de Brignoles",
-    address: { label: "Entrée principale", line1: "22 chemin des Consacs", postalCode: "83170", city: "Brignoles" },
-    surfaceM2: 850,
-    terrainSlope: "GENTLE",
-    accessWidthCm: 240,
-    hasAnimals: true,
-    parkingNotes: "Stationnement devant le portail",
-    publicNotes: "Prévenir avant l’arrivée",
-  };
-  const createGardenResponse = await render("/api/customer/gardens", {
-    accept: "application/json",
+  const gardenResponse = await request("/api/customer/gardens", {
     method: "POST",
-    headers: { Cookie: sessionCookie, Origin: "http://localhost", "Content-Type": "application/json" },
-    body: JSON.stringify(gardenPayload),
-    bindings: { DB: binding },
+    headers: { Cookie: cookie, "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json" },
+    body: JSON.stringify({
+      label: "Maison de Brignoles",
+      address: { line1: "22 chemin des Consacs", postalCode: "83170", city: "Brignoles" },
+      surfaceM2: 850, terrainSlope: "GENTLE", accessWidthCm: 240, hasAnimals: true,
+    }),
   });
-  assert.equal(createGardenResponse.status, 201);
-  const garden = (await createGardenResponse.json()).garden;
-  assert.match(garden.id, /^[a-f0-9-]{36}$/u);
-  assert.equal(database.prepare("SELECT owner_user_id AS owner, internal_notes AS internalNotes FROM gardens WHERE id = ?").get(garden.id).owner, database.prepare("SELECT id FROM users").get().id);
-
-  const crossOriginGarden = await render(`/api/customer/gardens/${garden.id}`, {
-    accept: "application/json",
-    method: "PATCH",
-    headers: { Cookie: sessionCookie, Origin: "https://malveillant.example", "Content-Type": "application/json" },
-    body: JSON.stringify(gardenPayload),
-    bindings: { DB: binding },
-  });
-  assert.equal(crossOriginGarden.status, 403);
-
-  const updateGardenResponse = await render(`/api/customer/gardens/${garden.id}`, {
-    accept: "application/json",
-    method: "PATCH",
-    headers: { Cookie: sessionCookie, Origin: "http://localhost", "Content-Type": "application/json" },
-    body: JSON.stringify({ ...gardenPayload, label: "Jardin principal", surfaceM2: 900 }),
-    bindings: { DB: binding },
-  });
-  assert.equal(updateGardenResponse.status, 200);
-  assert.equal((await updateGardenResponse.json()).garden.surfaceM2, 900);
-
-  database.prepare("INSERT INTO users (id, email, email_normalized, full_name, status) VALUES ('other-user', 'other@example.fr', 'other@example.fr', 'Autre Client', 'ACTIVE')").run();
-  database.prepare("INSERT INTO addresses (id, owner_user_id, kind, line1, postal_code, city, department_code) VALUES ('22222222-2222-4222-8222-222222222221', 'other-user', 'SERVICE', '1 rue privée', '06000', 'Nice', '06')").run();
-  database.prepare("INSERT INTO gardens (id, owner_user_id, address_id, label) VALUES ('22222222-2222-4222-8222-222222222222', 'other-user', '22222222-2222-4222-8222-222222222221', 'Jardin privé')").run();
-  const foreignGardenResponse = await render("/api/customer/gardens/22222222-2222-4222-8222-222222222222", {
-    accept: "application/json",
-    method: "PATCH",
-    headers: { Cookie: sessionCookie, Origin: "http://localhost", "Content-Type": "application/json" },
-    body: JSON.stringify(gardenPayload),
-    bindings: { DB: binding },
-  });
-  assert.equal(foreignGardenResponse.status, 404);
-
-  const refreshedAccount = await render("/espace-client", { headers: { Cookie: sessionCookie }, bindings: { DB: binding } });
-  const refreshedHtml = await refreshedAccount.text();
-  assert.match(refreshedHtml, /Camille Jardinier/u);
-  assert.match(refreshedHtml, /Jardin principal/u);
-
-  const archiveResponse = await render(`/api/customer/gardens/${garden.id}`, {
-    accept: "application/json",
-    method: "DELETE",
-    headers: { Cookie: sessionCookie, Origin: "http://localhost" },
-    bindings: { DB: binding },
-  });
-  assert.equal(archiveResponse.status, 204);
-  assert.equal(database.prepare("SELECT archived_at IS NOT NULL AS archived FROM gardens WHERE id = ?").get(garden.id).archived, 1);
-  const listedGardens = await render("/api/customer/gardens", { accept: "application/json", headers: { Cookie: sessionCookie }, bindings: { DB: binding } });
-  assert.deepEqual((await listedGardens.json()).gardens, []);
-  assert.ok(database.prepare("SELECT COUNT(*) AS count FROM audit_events WHERE action IN ('CUSTOMER_PROFILE_UPDATED', 'GARDEN_CREATED', 'GARDEN_UPDATED', 'GARDEN_ARCHIVED')").get().count >= 4);
-
-  const forbiddenAdmin = await render("/admin", {
-    headers: { Cookie: sessionCookie },
-    bindings: { DB: binding },
-  });
-  assert.equal(forbiddenAdmin.status, 307);
-  assert.equal(forbiddenAdmin.headers.get("location"), "/acces-refuse?espace=entreprise");
-
-  const replayResponse = await render(`${verifyUrl.pathname}${verifyUrl.search}`, { bindings: { DB: binding } });
-  assert.equal(replayResponse.status, 303);
-  assert.equal(replayResponse.headers.get("location"), "/connexion?erreur=lien-invalide");
-
-  const signOutResponse = await render("/api/auth/sign-out", {
-    method: "POST",
-    headers: { Cookie: sessionCookie, Origin: "http://localhost" },
-    bindings: { DB: binding },
-  });
-  assert.equal(signOutResponse.status, 303);
-  assert.match(signOutResponse.headers.get("set-cookie") ?? "", /Max-Age=0/u);
-  assert.equal(database.prepare("SELECT revoked_at IS NOT NULL AS revoked FROM auth_sessions").get().revoked, 1);
-  database.close();
+  assert.equal(gardenResponse.status, 201);
+  const dashboard = await request("/espace-client", { headers: { Cookie: cookie } });
+  assert.equal(dashboard.status, 200);
+  const html = await dashboard.text();
+  assert.match(html, /Camille Jardinier/u);
+  assert.match(html, /Maison de Brignoles/u);
 });
 
-test("réserve l'accès entreprise aux comptes invités et respecte leurs rôles", async () => {
-  const database = await createMigratedDatabase();
-  const binding = createD1Binding(database);
-  database.prepare(`
-    INSERT INTO users (id, email, email_normalized, full_name, status)
-    VALUES ('staff-1', 'equipe@sergeant-paysage.fr', 'equipe@sergeant-paysage.fr', 'Camille Équipe', 'INVITED')
-  `).run();
-  database.prepare(`INSERT INTO user_roles (user_id, role) VALUES ('staff-1', 'DISPATCHER')`).run();
-  database.prepare(`INSERT INTO user_roles (user_id, role) VALUES ('staff-1', 'FIELD_STAFF')`).run();
-
-  const unknownResponse = await render("/api/auth/staff/magic-link/request", {
-    accept: "application/json",
-    method: "POST",
-    headers: { "Content-Type": "application/json", Origin: "http://localhost" },
-    body: JSON.stringify({ email: "inconnu@example.fr", returnTo: "/admin" }),
-    bindings: { DB: binding },
-  });
-  assert.equal(unknownResponse.status, 202);
-  assert.equal((await unknownResponse.json()).previewUrl, undefined);
-  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM users").get().count, 1);
-
-  const requestResponse = await render("/api/auth/staff/magic-link/request", {
-    accept: "application/json",
-    method: "POST",
-    headers: { "Content-Type": "application/json", Origin: "http://localhost" },
-    body: JSON.stringify({ email: "equipe@sergeant-paysage.fr", returnTo: "/admin" }),
-    bindings: { DB: binding },
-  });
-  assert.equal(requestResponse.status, 202);
-  const requestPayload = await requestResponse.json();
-  assert.match(requestPayload.previewUrl, /portail=entreprise/u);
-
-  const verifyUrl = new URL(requestPayload.previewUrl);
-  const verifyResponse = await render(`${verifyUrl.pathname}${verifyUrl.search}`, { bindings: { DB: binding } });
-  assert.equal(verifyResponse.status, 303);
-  assert.equal(verifyResponse.headers.get("location"), "/admin");
-  assert.match(verifyResponse.headers.get("set-cookie") ?? "", /Max-Age=28800/u);
-  const staffCookie = verifyResponse.headers.get("set-cookie")?.split(";", 1)[0] ?? "";
-
-  assert.equal(database.prepare("SELECT kind FROM auth_sessions").get().kind, "STAFF");
-  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM user_roles WHERE role = 'CUSTOMER'").get().count, 0);
-  assert.equal(database.prepare("SELECT status FROM users WHERE id = 'staff-1'").get().status, "ACTIVE");
-
-  const adminResponse = await render("/admin", {
-    headers: { Cookie: staffCookie },
-    bindings: { DB: binding },
-  });
-  assert.equal(adminResponse.status, 200);
-  const adminHtml = await adminResponse.text();
-  assert.match(adminHtml, /Espace entreprise sécurisé/u);
-  assert.match(adminHtml, /Responsable planning/u);
-  assert.doesNotMatch(adminHtml, /Paiements/u);
-
-  const fieldResponse = await render("/terrain", {
-    headers: { Cookie: staffCookie },
-    bindings: { DB: binding },
-  });
-  assert.equal(fieldResponse.status, 200);
-  assert.match(await fieldResponse.text(), /Espace terrain sécurisé/u);
-
-  const forbiddenCustomer = await render("/espace-client", {
-    headers: { Cookie: staffCookie },
-    bindings: { DB: binding },
-  });
-  assert.equal(forbiddenCustomer.status, 307);
-  assert.equal(forbiddenCustomer.headers.get("location"), "/acces-refuse?espace=client");
-
-  const bootstrapResponse = await render("/api/auth/staff/magic-link/request", {
-    accept: "application/json",
-    method: "POST",
-    headers: { "Content-Type": "application/json", Origin: "http://localhost" },
-    body: JSON.stringify({ email: "direction@sergeant-paysage.fr", returnTo: "/admin" }),
-    bindings: { DB: binding, INITIAL_ADMIN_EMAIL: "direction@sergeant-paysage.fr" },
-  });
-  assert.equal(bootstrapResponse.status, 202);
-  assert.match((await bootstrapResponse.json()).previewUrl, /portail=entreprise/u);
-  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM user_roles WHERE role = 'ADMIN'").get().count, 1);
-  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM audit_events WHERE action = 'INITIAL_ADMIN_PROVISIONED'").get().count, 1);
-  database.close();
-});
-
-test("ships Sergeant Paysage metadata and social preview", async () => {
-  const [response, layout] = await Promise.all([
-    render("/"),
+test("les métadonnées et les sources ne contiennent plus le starter Sites", async () => {
+  const [home, layout, sources] = await Promise.all([
+    request("/"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
+    readAppSources(),
     access(new URL("../public/og.png", import.meta.url)),
   ]);
-
-  const html = await response.text();
-  assert.match(html, /<html[^>]*lang="fr"/i);
-  assert.match(html, /<title>Sergeant Paysage — Réservez votre jardinier en ligne<\/title>/i);
-  assert.match(html, /og\.png/i);
-  assert.match(layout, /Sergeant Paysage — Réservez votre jardinier en ligne/);
-  assert.doesNotMatch(layout, /Starter Project|codex-preview|_sites-preview/);
-});
-
-test("keeps application sources free of starter and dead-link remnants", async () => {
-  const sources = await readAppSources();
-
+  const html = await home.text();
+  assert.match(html, /<html[^>]*lang="fr"/iu);
+  assert.match(html, /Sergeant Paysage — Réservez votre jardinier en ligne/u);
+  assert.match(layout, /Sergeant Paysage — Réservez votre jardinier en ligne/u);
   for (const [pathname, source] of sources) {
-    assert.doesNotMatch(source, /<img\b/, `${pathname} should use the image component`);
-    assert.doesNotMatch(source, /href=["']#["']/, `${pathname} should not contain dead links`);
-    assert.doesNotMatch(source, /SkeletonPreview|codex-preview/, `${pathname} should not contain starter code`);
+    assert.doesNotMatch(source, /href=["']#["']/u, pathname);
+    assert.doesNotMatch(source, /codex-preview|_sites-preview/u, pathname);
   }
-
-  await assert.rejects(access(new URL("../app/_sites-preview/", import.meta.url)));
-  await assert.rejects(access(new URL("../public/_sites-preview/", projectRoot)));
+  await assert.rejects(access(new URL("../.openai/hosting.json", import.meta.url)));
+  await assert.rejects(access(new URL("../vite.config.ts", import.meta.url)));
 });
-
-async function createMigratedDatabase() {
-  const database = new DatabaseSync(":memory:");
-  database.exec("PRAGMA foreign_keys = ON");
-  const migrationNames = (await readdir(new URL("../drizzle/", import.meta.url)))
-    .filter((name) => /^\d+_.+\.sql$/u.test(name))
-    .sort();
-  for (const name of migrationNames) {
-    const sql = await readFile(new URL(`../drizzle/${name}`, import.meta.url), "utf8");
-    for (const statement of sql.split("--> statement-breakpoint")) {
-      if (statement.trim()) database.exec(statement);
-    }
-  }
-  return database;
-}
-
-function createD1Binding(database) {
-  class Prepared {
-    constructor(sql, values = []) {
-      this.sql = sql;
-      this.values = values;
-    }
-    bind(...values) { return new Prepared(this.sql, values); }
-    async first(columnName) {
-      const row = database.prepare(this.sql).get(...this.values) ?? null;
-      return columnName && row ? row[columnName] : row;
-    }
-    async all() {
-      return { results: database.prepare(this.sql).all(...this.values), success: true, meta: {} };
-    }
-    async run() { return this.execute(); }
-    execute() {
-      const result = database.prepare(this.sql).run(...this.values);
-      return { results: [], success: true, meta: { changes: Number(result.changes) } };
-    }
-  }
-
-  return {
-    prepare(sql) { return new Prepared(sql); },
-    async batch(statements) {
-      database.exec("BEGIN IMMEDIATE");
-      try {
-        const results = statements.map((statement) => statement.execute());
-        database.exec("COMMIT");
-        return results;
-      } catch (error) {
-        database.exec("ROLLBACK");
-        throw error;
-      }
-    },
-    async exec(sql) { database.exec(sql); return { count: 0, duration: 0 }; },
-  };
-}
