@@ -16,6 +16,8 @@
     "env:check:all": "node --env-file-if-exists=.env.local scripts/validate-environment.mjs --require=all",
     "check": "npm run env:check && npm run lint && npm run typecheck && npm test",
     "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local --config wrangler.local.jsonc",
+    "db:seed:demo": "node --env-file-if-exists=.env.local scripts/seed-demo.mjs",
     "db:validate": "node --test tests/database-schema.test.mjs"
   },
   "dependencies": {

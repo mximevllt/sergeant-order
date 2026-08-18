@@ -23,6 +23,35 @@ export type UserRole =
   | "ACCOUNTING"
   | "ADMIN";
 
+export const businessSettings = sqliteTable("business_settings", {
+  id: text("id").primaryKey(),
+  legalName: text("legal_name").notNull(),
+  tradeName: text("trade_name").notNull(),
+  legalForm: text("legal_form").notNull(),
+  registeredOffice: json<Record<string, string>>("registered_office_json").notNull(),
+  siren: text("siren").notNull(),
+  siret: text("siret").notNull(),
+  vatNumber: text("vat_number").notNull(),
+  shareCapitalCents: integer("share_capital_cents").notNull(),
+  registry: text("registry").notNull(),
+  vatRateBasisPoints: integer("vat_rate_basis_points").notNull().default(2000),
+  currency: text("currency").notNull().default("EUR"),
+  timezone: text("timezone").notNull().default("Europe/Paris"),
+  minimumLeadHours: integer("minimum_lead_hours").notNull().default(24),
+  maximumAdvanceDays: integer("maximum_advance_days").notNull().default(31),
+  workdays: json<number[]>("workdays_json").notNull(),
+  workPeriods: json<Array<{ code: string; startsLocal: string; endsLocal: string }>>("work_periods_json").notNull(),
+  aiciEnabled: integer("aici_enabled", { mode: "boolean" }).notNull().default(true),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (table) => [
+  uniqueIndex("uq_business_settings_siren").on(table.siren),
+  uniqueIndex("uq_business_settings_siret").on(table.siret),
+  check("ck_business_settings_capital", sql`${table.shareCapitalCents} >= 0`),
+  check("ck_business_settings_vat", sql`${table.vatRateBasisPoints} BETWEEN 0 AND 10000`),
+  check("ck_business_settings_booking_window", sql`${table.minimumLeadHours} >= 0 AND ${table.maximumAdvanceDays} >= 1`),
+]);
+
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
   email: text("email").notNull(),

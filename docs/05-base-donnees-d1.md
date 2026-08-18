@@ -31,7 +31,13 @@ Le fichier d'hébergement déclare maintenant la liaison D1 `DB`. Les identifian
 - Les codes d'accès ne disposent d'aucun champ en clair : seule une valeur chiffrée et sa version de clé sont prévues.
 - Les suppressions en cascade sont limitées aux véritables sous-objets non contractuels. Les commandes, factures, paiements et historiques ne sont pas supprimés en cascade.
 
-## 3. Dictionnaire des 49 tables
+## 3. Dictionnaire des 50 tables
+
+### Paramètres de l'entreprise
+
+| Table | Responsabilité |
+|---|---|
+| `business_settings` | Identité légale, TVA, fuseau, horaires, délai minimal, horizon de réservation et activation AICI |
 
 ### Identité et autorisations
 
@@ -190,7 +196,7 @@ La migration termine par `PRAGMA optimize` pour préparer le planificateur SQLit
 
 Le test `tests/database-schema.test.mjs` exécute réellement toute la migration dans une base SQLite en mémoire, avec les clés étrangères activées. Il contrôle :
 
-1. la création des 49 tables ;
+1. la création des 50 tables ;
 2. l'absence de référence étrangère invalide ;
 3. l'unicité des emails ;
 4. l'impossibilité d'avoir deux barèmes actifs ;
@@ -217,7 +223,7 @@ La commande `npm run db:validate` permet d'exécuter uniquement ces contrôles. 
 - la structure de données couvre le cycle complet, du compte client à la facture et au compte rendu ;
 - le code dispose d'un accès D1 centralisé via `getDb()` ;
 - la liaison logique `DB` est active dans la configuration Sites ;
-- la migration initiale est versionnée et exécutable ;
+- la migration structurelle initiale est versionnée et exécutable ;
 - les protections critiques sont vérifiées automatiquement ;
-- aucune donnée fictive n'a été injectée dans une future base de production ;
-- le contenu initial — société, deux équipes, barème à 329 €, horaires et zones — sera injecté par une procédure d'initialisation idempotente dans l'étape métier correspondante, et non caché dans la structure SQL.
+- aucune donnée fictive n'est injectée dans une future base de production ;
+- depuis l'étape 06, une seconde migration installe séparément les paramètres réels de la société, les deux équipes, les horaires, le catalogue, le barème à 329 € et les zones initiales.

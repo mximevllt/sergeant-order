@@ -8,6 +8,13 @@
       "when": 1787045282891,
       "tag": "0000_dear_gunslinger",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1787046190816,
+      "tag": "0001_chief_greymalkin",
+      "breakpoints": true
     }
   ]
 }
