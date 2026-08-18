@@ -10,6 +10,8 @@ export const CORE_VARIABLES = Object.freeze([
   "AICI_MODE",
 ]);
 
+export const OPTIONAL_VARIABLES = Object.freeze(["INITIAL_ADMIN_EMAIL"]);
+
 export const SECRET_VARIABLES = Object.freeze([
   "AUTH_SECRET",
   "RESEND_API_KEY",
@@ -137,6 +139,7 @@ export function inspectEnvironment(source = {}, options = {}) {
 
   const knownVariables = new Set([
     ...CORE_VARIABLES,
+    ...OPTIONAL_VARIABLES,
     ...Object.values(INTEGRATION_GROUPS).flat(),
   ]);
   for (const key of knownVariables) {
@@ -173,6 +176,9 @@ export function inspectEnvironment(source = {}, options = {}) {
   }
   if (values.SUPPORT_EMAIL && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.SUPPORT_EMAIL)) {
     errors.push("SUPPORT_EMAIL n'est pas une adresse valide.");
+  }
+  if (values.INITIAL_ADMIN_EMAIL && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.INITIAL_ADMIN_EMAIL)) {
+    errors.push("INITIAL_ADMIN_EMAIL n'est pas une adresse valide.");
   }
   addModeChecks(environment, values, errors);
 

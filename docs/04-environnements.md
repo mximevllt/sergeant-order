@@ -47,6 +47,7 @@ Les groupes sont contrôlés comme des ensembles : dès qu'une variable d'un gro
 ### Authentification
 
 - `AUTH_SECRET` : empreinte cryptographique des sessions, adresses réseau et liens de connexion.
+- `INITIAL_ADMIN_EMAIL` : adresse nominative autorisée à créer l'unique premier administrateur lorsqu'aucun rôle `ADMIN` n'existe encore.
 
 ### Emails transactionnels
 

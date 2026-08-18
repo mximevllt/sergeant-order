@@ -79,7 +79,7 @@ test("server-renders the current product routes", async () => {
     ["/", /Votre jardin entretenu/, /Les services/],
     ["/reserver", /Étape/, /Que souhaitez-vous faire/],
     ["/connexion", /Accédez à votre espace/, /Recevoir mon lien/],
-    ["/admin", /Planning/, /Nouvelle intervention/],
+    ["/connexion-entreprise", /Connectez-vous à votre poste/, /Recevoir mon accès/],
     ["/tarifs", /Des prix simples/, /Votre estimation/],
   ];
 
@@ -97,6 +97,12 @@ test("server-renders the current product routes", async () => {
   const protectedResponse = await render("/espace-client");
   assert.equal(protectedResponse.status, 307);
   assert.match(protectedResponse.headers.get("location") ?? "", /^\/connexion\?returnTo=/u);
+  const protectedAdmin = await render("/admin");
+  assert.equal(protectedAdmin.status, 307);
+  assert.match(protectedAdmin.headers.get("location") ?? "", /^\/connexion-entreprise\?returnTo=/u);
+  const protectedField = await render("/terrain");
+  assert.equal(protectedField.status, 307);
+  assert.match(protectedField.headers.get("location") ?? "", /^\/connexion-entreprise\?returnTo=/u);
 });
 
 test("crée un compte par lien, ouvre une session, interdit la réutilisation et déconnecte", async () => {
@@ -163,6 +169,13 @@ test("crée un compte par lien, ouvre une session, interdit la réutilisation et
   assert.match(accountHtml, /camille\.jardin@example\.fr/u);
   assert.equal(database.prepare("SELECT email_verified_at IS NOT NULL AS verified FROM users").get().verified, 1);
 
+  const forbiddenAdmin = await render("/admin", {
+    headers: { Cookie: sessionCookie },
+    bindings: { DB: binding },
+  });
+  assert.equal(forbiddenAdmin.status, 307);
+  assert.equal(forbiddenAdmin.headers.get("location"), "/acces-refuse?espace=entreprise");
+
   const replayResponse = await render(`${verifyUrl.pathname}${verifyUrl.search}`, { bindings: { DB: binding } });
   assert.equal(replayResponse.status, 303);
   assert.equal(replayResponse.headers.get("location"), "/connexion?erreur=lien-invalide");
@@ -175,6 +188,87 @@ test("crée un compte par lien, ouvre une session, interdit la réutilisation et
   assert.equal(signOutResponse.status, 303);
   assert.match(signOutResponse.headers.get("set-cookie") ?? "", /Max-Age=0/u);
   assert.equal(database.prepare("SELECT revoked_at IS NOT NULL AS revoked FROM auth_sessions").get().revoked, 1);
+  database.close();
+});
+
+test("réserve l'accès entreprise aux comptes invités et respecte leurs rôles", async () => {
+  const database = await createMigratedDatabase();
+  const binding = createD1Binding(database);
+  database.prepare(`
+    INSERT INTO users (id, email, email_normalized, full_name, status)
+    VALUES ('staff-1', 'equipe@sergeant-paysage.fr', 'equipe@sergeant-paysage.fr', 'Camille Équipe', 'INVITED')
+  `).run();
+  database.prepare(`INSERT INTO user_roles (user_id, role) VALUES ('staff-1', 'DISPATCHER')`).run();
+  database.prepare(`INSERT INTO user_roles (user_id, role) VALUES ('staff-1', 'FIELD_STAFF')`).run();
+
+  const unknownResponse = await render("/api/auth/staff/magic-link/request", {
+    accept: "application/json",
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: "http://localhost" },
+    body: JSON.stringify({ email: "inconnu@example.fr", returnTo: "/admin" }),
+    bindings: { DB: binding },
+  });
+  assert.equal(unknownResponse.status, 202);
+  assert.equal((await unknownResponse.json()).previewUrl, undefined);
+  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM users").get().count, 1);
+
+  const requestResponse = await render("/api/auth/staff/magic-link/request", {
+    accept: "application/json",
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: "http://localhost" },
+    body: JSON.stringify({ email: "equipe@sergeant-paysage.fr", returnTo: "/admin" }),
+    bindings: { DB: binding },
+  });
+  assert.equal(requestResponse.status, 202);
+  const requestPayload = await requestResponse.json();
+  assert.match(requestPayload.previewUrl, /portail=entreprise/u);
+
+  const verifyUrl = new URL(requestPayload.previewUrl);
+  const verifyResponse = await render(`${verifyUrl.pathname}${verifyUrl.search}`, { bindings: { DB: binding } });
+  assert.equal(verifyResponse.status, 303);
+  assert.equal(verifyResponse.headers.get("location"), "/admin");
+  assert.match(verifyResponse.headers.get("set-cookie") ?? "", /Max-Age=28800/u);
+  const staffCookie = verifyResponse.headers.get("set-cookie")?.split(";", 1)[0] ?? "";
+
+  assert.equal(database.prepare("SELECT kind FROM auth_sessions").get().kind, "STAFF");
+  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM user_roles WHERE role = 'CUSTOMER'").get().count, 0);
+  assert.equal(database.prepare("SELECT status FROM users WHERE id = 'staff-1'").get().status, "ACTIVE");
+
+  const adminResponse = await render("/admin", {
+    headers: { Cookie: staffCookie },
+    bindings: { DB: binding },
+  });
+  assert.equal(adminResponse.status, 200);
+  const adminHtml = await adminResponse.text();
+  assert.match(adminHtml, /Espace entreprise sécurisé/u);
+  assert.match(adminHtml, /Responsable planning/u);
+  assert.doesNotMatch(adminHtml, /Paiements/u);
+
+  const fieldResponse = await render("/terrain", {
+    headers: { Cookie: staffCookie },
+    bindings: { DB: binding },
+  });
+  assert.equal(fieldResponse.status, 200);
+  assert.match(await fieldResponse.text(), /Espace terrain sécurisé/u);
+
+  const forbiddenCustomer = await render("/espace-client", {
+    headers: { Cookie: staffCookie },
+    bindings: { DB: binding },
+  });
+  assert.equal(forbiddenCustomer.status, 307);
+  assert.equal(forbiddenCustomer.headers.get("location"), "/acces-refuse?espace=client");
+
+  const bootstrapResponse = await render("/api/auth/staff/magic-link/request", {
+    accept: "application/json",
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: "http://localhost" },
+    body: JSON.stringify({ email: "direction@sergeant-paysage.fr", returnTo: "/admin" }),
+    bindings: { DB: binding, INITIAL_ADMIN_EMAIL: "direction@sergeant-paysage.fr" },
+  });
+  assert.equal(bootstrapResponse.status, 202);
+  assert.match((await bootstrapResponse.json()).previewUrl, /portail=entreprise/u);
+  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM user_roles WHERE role = 'ADMIN'").get().count, 1);
+  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM audit_events WHERE action = 'INITIAL_ADMIN_PROVISIONED'").get().count, 1);
   database.close();
 });
 

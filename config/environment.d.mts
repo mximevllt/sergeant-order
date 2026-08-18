@@ -21,6 +21,7 @@ export interface EnvironmentInspection {
 
 export const APP_ENVIRONMENTS: readonly AppEnvironment[];
 export const CORE_VARIABLES: readonly string[];
+export const OPTIONAL_VARIABLES: readonly string[];
 export const SECRET_VARIABLES: readonly string[];
 export const INTEGRATION_GROUPS: Readonly<Record<string, readonly string[]>>;
 

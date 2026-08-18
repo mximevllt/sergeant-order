@@ -9,7 +9,9 @@ import { isSecureRequest, sessionCookie } from "@/modules/auth/security.mjs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const token = new URL(request.url).searchParams.get("token") ?? "";
+  const url = new URL(request.url);
+  const token = url.searchParams.get("token") ?? "";
+  const companyPortal = url.searchParams.get("portail") === "entreprise";
   try {
     const result = await verifyMagicLink(request, token);
     return new Response(null, {
@@ -17,7 +19,7 @@ export async function GET(request: Request) {
       headers: {
         "Cache-Control": "no-store",
         Location: result.returnTo,
-        "Set-Cookie": sessionCookie(result.token, isSecureRequest(request)),
+      "Set-Cookie": sessionCookie(result.token, isSecureRequest(request), result.maxAgeSeconds),
       },
     });
   } catch (error) {
@@ -28,9 +30,10 @@ export async function GET(request: Request) {
         : error instanceof InvalidMagicLinkError
           ? "lien-invalide"
           : "lien-invalide";
+    const loginPath = companyPortal ? "/connexion-entreprise" : "/connexion";
     return new Response(null, {
       status: 303,
-      headers: { "Cache-Control": "no-store", Location: `/connexion?erreur=${reason}` },
+      headers: { "Cache-Control": "no-store", Location: `${loginPath}?erreur=${reason}` },
     });
   }
 }

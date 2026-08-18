@@ -1,0 +1,2 @@
+ALTER TABLE `magic_link_tokens` ADD `audience` text DEFAULT 'CUSTOMER' NOT NULL;--> statement-breakpoint
+CREATE INDEX `idx_magic_link_tokens_audience_email` ON `magic_link_tokens` (`audience`,`email_normalized`,`expires_at`);

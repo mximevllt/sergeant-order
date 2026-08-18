@@ -18,11 +18,11 @@ export async function POST(request: Request) {
     return Response.json({ error: "ORIGIN_FORBIDDEN" }, { status: 403, headers: JSON_HEADERS });
   }
   const contentLength = Number(request.headers.get("content-length") ?? 0);
-  if (contentLength > 8192) {
+  if (contentLength > 4096) {
     return Response.json({ error: "REQUEST_TOO_LARGE" }, { status: 413, headers: JSON_HEADERS });
   }
 
-  let body: { email?: unknown; fullName?: unknown; returnTo?: unknown };
+  let body: { email?: unknown; returnTo?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -30,11 +30,11 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await requestMagicLink(request, { ...body, audience: "CUSTOMER" });
+    const result = await requestMagicLink(request, { ...body, audience: "STAFF" });
     return Response.json(
       {
         accepted: true,
-        message: "Si cette adresse peut être utilisée, un lien de connexion vient d’être envoyé.",
+        message: "Si cette adresse est autorisée, un lien de connexion vient d’être envoyé.",
         ...(result.previewUrl ? { previewUrl: result.previewUrl } : {}),
       },
       { status: 202, headers: JSON_HEADERS },
@@ -45,8 +45,8 @@ export async function POST(request: Request) {
     }
     if (error instanceof AuthDeliveryError) {
       return Response.json(
-        { error: "EMAIL_UNAVAILABLE", message: "L’envoi du lien est temporairement indisponible." },
-        { status: 503, headers: { ...JSON_HEADERS, "Retry-After": "60" } },
+        { accepted: true, message: "Si cette adresse est autorisée, un lien de connexion vient d’être envoyé." },
+        { status: 202, headers: JSON_HEADERS },
       );
     }
     if (error instanceof AuthConfigurationError) {

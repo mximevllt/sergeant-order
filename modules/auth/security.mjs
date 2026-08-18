@@ -3,6 +3,7 @@ const encoder = new TextEncoder();
 export const AUTH_COOKIE_NAME = "sp_session";
 export const MAGIC_LINK_TTL_SECONDS = 10 * 60;
 export const CUSTOMER_SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
+export const STAFF_SESSION_TTL_SECONDS = 8 * 60 * 60;
 export const MAGIC_LINK_EMAIL_LIMIT = 3;
 export const MAGIC_LINK_IP_LIMIT = 12;
 export const MAGIC_LINK_RATE_WINDOW_MINUTES = 15;
@@ -52,6 +53,20 @@ export function safeReturnTo(value, fallback = "/espace-client") {
     url.pathname.startsWith("/api/auth/")
   ) return fallback;
   return `${url.pathname}${url.search}${url.hash}`;
+}
+
+export function safePortalReturnTo(value, audience = "CUSTOMER") {
+  const fallback = audience === "STAFF" ? "/admin" : "/espace-client";
+  const returnTo = safeReturnTo(value, fallback);
+  const pathname = new URL(returnTo, "https://sergeant-paysage.local").pathname;
+  if (audience === "STAFF") {
+    return pathname === "/admin" || pathname.startsWith("/admin/") || pathname === "/terrain" || pathname.startsWith("/terrain/")
+      ? returnTo
+      : fallback;
+  }
+  return pathname === "/espace-client" || pathname.startsWith("/espace-client/")
+    ? returnTo
+    : fallback;
 }
 
 export function isSameOriginRequest(request) {
@@ -115,14 +130,14 @@ export function readCookie(cookieHeader, name = AUTH_COOKIE_NAME) {
   return null;
 }
 
-export function sessionCookie(token, secure = true) {
+export function sessionCookie(token, secure = true, maxAgeSeconds = CUSTOMER_SESSION_TTL_SECONDS) {
   return [
     `${AUTH_COOKIE_NAME}=${encodeURIComponent(token)}`,
     "Path=/",
     "HttpOnly",
     "SameSite=Lax",
     secure ? "Secure" : null,
-    `Max-Age=${CUSTOMER_SESSION_TTL_SECONDS}`,
+    `Max-Age=${maxAgeSeconds}`,
   ].filter(Boolean).join("; ");
 }
 

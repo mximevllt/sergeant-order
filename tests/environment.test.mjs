@@ -46,6 +46,13 @@ test("les modes réels sont obligatoires en production", () => {
   assert.ok(report.errors.some((error) => error.includes("PAYMENT_MODE")));
 });
 
+test("l'adresse du premier administrateur reste optionnelle mais doit être valide", () => {
+  assert.equal(inspectEnvironment(stagingCore, { environment: "staging" }).valid, true);
+  const invalid = inspectEnvironment({ ...stagingCore, INITIAL_ADMIN_EMAIL: "adresse-invalide" }, { environment: "staging" });
+  assert.equal(invalid.valid, false);
+  assert.ok(invalid.errors.some((error) => error.includes("INITIAL_ADMIN_EMAIL")));
+});
+
 test("une intégration partiellement renseignée est refusée", () => {
   const report = inspectEnvironment({
     ...stagingCore,

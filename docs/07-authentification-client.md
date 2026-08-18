@@ -4,7 +4,7 @@ Statut : **implémentation terminée ; envoi réel des emails conditionné aux a
 
 Cette étape remplace l'accès fictif à l'espace client par une identité persistante et vérifiée. Un visiteur demande un lien personnel, prouve qu'il contrôle l'adresse email, obtient automatiquement son compte client et ouvre une session révocable.
 
-Les rôles entreprise et leurs politiques détaillées relèvent de l'étape 08. Les profils, jardins et coordonnées modifiables relèvent de l'étape 09.
+Les rôles entreprise et leurs politiques détaillées ont été ajoutés à l'étape 08. Les profils, jardins et coordonnées modifiables relèvent de l'étape 09.
 
 ## 1. Parcours livré
 
@@ -145,4 +145,4 @@ Le parcours est exécuté de bout en bout contre une vraie base SQLite vierge po
 
 Le code d'authentification, la migration, les sessions et l'interface peuvent être déployés immédiatement. L'envoi réel d'un lien à une boîte email externe ne peut toutefois être déclaré opérationnel tant que le domaine d'envoi Resend et ses identifiants n'ont pas été fournis dans l'environnement hébergé.
 
-Cette dépendance ne bloque pas l'étape 08 sur les rôles et autorisations, mais elle devra être levée avant une recette publique complète des comptes clients.
+Cette dépendance n'a pas bloqué l'étape 08 sur les rôles et autorisations, mais elle devra être levée avant une recette publique complète des comptes clients et entreprise.

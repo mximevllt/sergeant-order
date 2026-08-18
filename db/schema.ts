@@ -102,6 +102,7 @@ export const magicLinkTokens = sqliteTable("magic_link_tokens", {
   requestedName: text("requested_name"),
   tokenHash: text("token_hash").notNull(),
   purpose: text("purpose", { enum: ["SIGN_IN", "VERIFY_EMAIL", "CHANGE_EMAIL"] }).notNull(),
+  audience: text("audience", { enum: ["CUSTOMER", "STAFF"] }).notNull().default("CUSTOMER"),
   returnTo: text("return_to"),
   expiresAt: text("expires_at").notNull(),
   usedAt: text("used_at"),
@@ -112,6 +113,7 @@ export const magicLinkTokens = sqliteTable("magic_link_tokens", {
   index("idx_magic_link_tokens_email_expiry").on(table.emailNormalized, table.expiresAt),
   index("idx_magic_link_tokens_email_created").on(table.emailNormalized, table.createdAt),
   index("idx_magic_link_tokens_ip_created").on(table.requestedIpHash, table.createdAt),
+  index("idx_magic_link_tokens_audience_email").on(table.audience, table.emailNormalized, table.expiresAt),
 ]);
 
 export const organizations = sqliteTable("organizations", {

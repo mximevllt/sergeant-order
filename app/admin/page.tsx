@@ -1,5 +1,35 @@
 import Image from "next/image";
+import Link from "next/link";
+import { hasPermission, type Permission } from "@/modules/authorization/policy.mjs";
+import { requireStaffPermission } from "@/modules/auth/server";
 
-export default function AdminPage() {
-  return <main className="admin-app"><aside><Image src="/logo-sergeant-paysage-blanc.png" alt="Sergeant Paysage" width={1784} height={387} priority /><nav>{["Planning","Interventions","Clients","Jardins","Tarifs","Catalogue","Zones","Équipes","Paiements","Fiscalité","Statistiques","Réglages"].map((item,i)=><button type="button" className={i===0?"active":""} key={item}>{item}</button>)}</nav></aside><section><header><div><p>Lundi 17 août</p><h1>Planning</h1></div><button type="button">+ Nouvelle intervention</button></header><div className="admin-stats"><article><span>Interventions</span><strong>8</strong><small>aujourd’hui</small></article><article><span>Chiffre planifié</span><strong>1 876 €</strong><small>TTC</small></article><article><span>Capacité</span><strong>87 %</strong><small>6 équipes</small></article></div><div className="day-plan"><h2>Aujourd’hui</h2><div className="plan-row"><time>08:00</time><span className="status-dot" /><div><strong>Brignoles</strong><p>Tonte + haies · 4 h</p></div><div><span>Thomas B.</span><b>Mission prête</b></div></div><div className="plan-row"><time>08:00</time><span className="status-dot" /><div><strong>Cotignac</strong><p>Entretien complet · 4 h</p></div><div><span>Équipe 2</span><b>Mission prête</b></div></div><div className="plan-row"><time>13:00</time><span className="status-dot bronze" /><div><strong>Le Val</strong><p>Débroussaillage · 4 h</p></div><div><span>Thomas B.</span><b>À vérifier</b></div></div></div></section></main>;
+export const dynamic = "force-dynamic";
+
+const NAVIGATION: Array<{ label: string; permission: Permission }> = [
+  { label: "Planning", permission: "planning.read" },
+  { label: "Interventions", permission: "orders.read" },
+  { label: "Clients", permission: "customers.read" },
+  { label: "Jardins", permission: "gardens.read" },
+  { label: "Tarifs", permission: "pricing.read" },
+  { label: "Zones", permission: "zones.read" },
+  { label: "Équipes", permission: "teams.read" },
+  { label: "Paiements", permission: "payments.read" },
+  { label: "Facturation", permission: "invoices.read" },
+  { label: "Fiscalité", permission: "fiscality.read" },
+  { label: "Statistiques", permission: "analytics.read" },
+  { label: "Réglages", permission: "settings.read" },
+];
+
+const ROLE_LABELS: Record<string, string> = {
+  DISPATCHER: "Responsable planning",
+  ACCOUNTING: "Comptabilité",
+  ADMIN: "Administration",
+};
+
+export default async function AdminPage() {
+  const user = await requireStaffPermission("backoffice.access", "/admin");
+  const navigation = NAVIGATION.filter(({ permission }) => hasPermission(user.roles, permission));
+  const roleLabels = user.roles.map((role) => ROLE_LABELS[role]).filter(Boolean);
+
+  return <main className="admin-app"><aside><Link href="/" aria-label="Sergeant Paysage, accueil"><Image src="/logo-sergeant-paysage-blanc.png" alt="Sergeant Paysage" width={1784} height={387} priority /></Link><nav aria-label="Modules autorisés">{navigation.map((item, index) => <span className={index === 0 ? "active" : ""} key={item.label}>{item.label}</span>)}</nav><div className="admin-identity"><strong>{user.fullName}</strong><small>{roleLabels.join(" · ")}</small><form action="/api/auth/sign-out" method="post"><button type="submit">Se déconnecter</button></form></div></aside><section><header><div><p>Espace entreprise sécurisé</p><h1>Tableau de bord</h1></div><span className="admin-session">Session 8 h</span></header><div className="admin-welcome"><p className="kicker">Autorisations actives</p><h2>Bonjour {user.fullName.split(" ")[0]}.</h2><p>Votre navigation est automatiquement limitée aux responsabilités associées à votre compte. Chaque contrôle est également répété sur le serveur avant toute lecture ou modification.</p><div>{roleLabels.map((label) => <span key={label}>{label}</span>)}</div></div><div className="admin-empty"><span>Étape 08</span><h2>L’accès entreprise est maintenant protégé.</h2><p>Les données opérationnelles remplaceront progressivement cet état d’attente lorsque le planning, les commandes, les paiements et la facturation seront connectés à leurs étapes respectives.</p></div></section></main>;
 }

@@ -615,16 +615,49 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .profile-card button { color: var(--paper); background: var(--ink); }
 
 .admin-app { min-height: 100vh; display: grid; grid-template-columns: 230px 1fr; background: #ecebe4; }
-.admin-app > aside { padding: 25px 18px; color: var(--paper); background: var(--ink); }
+.admin-app > aside { min-height: 100vh; padding: 25px 18px; display: flex; flex-direction: column; color: var(--paper); background: var(--ink); }
 .admin-app > aside img { width: 185px; height: auto; }
 .admin-app > aside nav { margin-top: 45px; display: grid; gap: 3px; }
-.admin-app > aside nav button { padding: 10px 12px; text-align: left; cursor: pointer; color: rgba(246,244,235,.55); background: transparent; border: 0; border-radius: 7px; font-size: 10px; }
-.admin-app > aside nav button.active { color: var(--paper); background: rgba(246,244,235,.09); }
+.admin-app > aside nav span { padding: 10px 12px; text-align: left; color: rgba(246,244,235,.55); border-radius: 7px; font-size: 10px; }
+.admin-app > aside nav span.active { color: var(--paper); background: rgba(246,244,235,.09); }
+.admin-identity { margin-top: auto; padding: 20px 12px 4px; border-top: 1px solid rgba(246,244,235,.14); }
+.admin-identity strong, .admin-identity small { display: block; }
+.admin-identity strong { font-family: var(--display); font-size: 15px; }
+.admin-identity small { margin-top: 4px; color: rgba(246,244,235,.5); font-size: 8px; line-height: 1.5; }
+.admin-identity button { margin-top: 14px; padding: 0 0 5px; color: var(--bronze); background: transparent; border: 0; border-bottom: 1px solid rgba(160,124,80,.5); cursor: pointer; font-size: 8px; letter-spacing: .12em; text-transform: uppercase; }
 .admin-app > section { padding: 40px 4vw 80px; }
 .admin-app > section > header { display: flex; justify-content: space-between; align-items: center; }
 .admin-app header p { color: var(--bronze); font-size: 8px; letter-spacing: .2em; text-transform: uppercase; }
 .admin-app h1 { margin-top: 4px; font-size: 47px; }
-.admin-app header button { min-height: 43px; padding: 0 16px; color: var(--paper); background: var(--ink); border: 0; border-radius: 8px; font-size: 9px; }
+.admin-session { padding: 9px 12px; color: var(--paper); background: var(--ink); border-radius: 999px; font-size: 8px; letter-spacing: .13em; text-transform: uppercase; }
+.admin-welcome { margin-top: 35px; padding: clamp(28px,4vw,52px); color: var(--paper); background: var(--ink); }
+.admin-welcome h2 { max-width: 680px; margin-top: 18px; font-size: clamp(38px,4vw,62px); }
+.admin-welcome > p:not(.kicker) { max-width: 680px; margin-top: 16px; color: rgba(246,244,235,.62); font-size: 13px; line-height: 1.7; }
+.admin-welcome > div { margin-top: 30px; display: flex; flex-wrap: wrap; gap: 8px; }
+.admin-welcome > div span { padding: 8px 11px; color: var(--ink); background: var(--paper); border-radius: 999px; font-size: 8px; letter-spacing: .12em; text-transform: uppercase; }
+.admin-empty { margin-top: 14px; padding: 34px; background: var(--paper); border: 1px solid rgba(33,46,35,.08); }
+.admin-empty > span { color: var(--bronze); font-size: 8px; letter-spacing: .2em; text-transform: uppercase; }
+.admin-empty h2 { margin-top: 13px; font-size: 29px; }
+.admin-empty p { max-width: 700px; margin-top: 10px; color: var(--sage); font-size: 12px; line-height: 1.65; }
+
+.access-denied { min-height: 100vh; padding: 8vw; display: grid; place-items: center; background: #ebeae3; }
+.access-denied section { width: min(720px,100%); padding: clamp(36px,6vw,75px); background: var(--paper); border-top: 4px solid var(--bronze); box-shadow: 0 30px 80px rgba(33,46,35,.12); }
+.access-denied h1 { margin-top: 20px; font-size: clamp(45px,6vw,76px); line-height: .98; }
+.access-denied section > p:not(.kicker) { max-width: 600px; margin-top: 22px; color: var(--sage); font-size: 15px; line-height: 1.7; }
+.access-denied form { margin-top: 30px; }
+.access-denied section > a { margin-top: 18px; display: inline-block; color: var(--bronze); border-bottom: 1px solid var(--line); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; }
+
+.field-app { min-height: 100vh; color: var(--paper); background: var(--ink); }
+.field-app > header { min-height: 82px; padding: 18px 5vw; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(246,244,235,.14); }
+.field-app > header img { width: 190px; height: auto; }
+.field-app > header button { padding: 0 0 6px; color: var(--bronze); background: transparent; border: 0; border-bottom: 1px solid rgba(160,124,80,.5); cursor: pointer; font-size: 8px; letter-spacing: .12em; text-transform: uppercase; }
+.field-app > section { width: min(920px,90vw); margin: 0 auto; padding: 80px 0 110px; }
+.field-app h1 { margin-top: 16px; font-size: clamp(54px,8vw,100px); }
+.field-app article { margin-top: 50px; padding: clamp(30px,5vw,55px); color: var(--ink); background: var(--paper); border-left: 4px solid var(--bronze); }
+.field-app article > span { color: var(--bronze); font-size: 8px; letter-spacing: .2em; text-transform: uppercase; }
+.field-app article h2 { max-width: 660px; margin-top: 18px; font-size: clamp(31px,4vw,48px); }
+.field-app article p { max-width: 660px; margin-top: 14px; color: var(--sage); font-size: 13px; line-height: 1.7; }
+.field-app section > small { margin-top: 22px; display: block; color: rgba(246,244,235,.48); font-size: 9px; }
 .admin-stats { margin-top: 35px; display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
 .admin-stats article { padding: 22px; background: var(--paper); border: 1px solid rgba(33,46,35,.08); }
 .admin-stats span, .admin-stats strong, .admin-stats small { display: block; }
@@ -667,7 +700,12 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
   .client-nav > form + a:last-child { display: none; }
   .client-nav > a:last-child { display: none; }
   .client-content { padding: 40px 5vw 80px; }
-  .admin-app > aside { display: none; }
+  .admin-app > aside { min-height: auto; padding: 18px; flex-direction: row; align-items: center; gap: 18px; overflow-x: auto; }
+  .admin-app > aside > a img { width: 145px; }
+  .admin-app > aside nav { margin: 0 0 0 auto; display: flex; white-space: nowrap; }
+  .admin-identity { margin: 0; padding: 0 0 0 18px; border-top: 0; border-left: 1px solid rgba(246,244,235,.14); white-space: nowrap; }
+  .admin-identity strong, .admin-identity small { display: none; }
+  .admin-identity button { margin-top: 0; }
 }
 
 @media (max-width: 620px) {

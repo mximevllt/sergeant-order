@@ -1,6 +1,7 @@
 import { getRuntimeEnvironment, runtimeValue } from "@/config/runtime-environment";
 import {
   CUSTOMER_SESSION_TTL_SECONDS,
+  STAFF_SESSION_TTL_SECONDS,
   MAGIC_LINK_EMAIL_LIMIT,
   MAGIC_LINK_IP_LIMIT,
   MAGIC_LINK_RATE_WINDOW_MINUTES,
@@ -14,8 +15,11 @@ import {
   normalizeEmail,
   randomToken,
   readCookie,
-  safeReturnTo,
+  safePortalReturnTo,
 } from "./security.mjs";
+import { hasAnyStaffRole } from "@/modules/authorization/policy.mjs";
+
+export type AuthAudience = "CUSTOMER" | "STAFF";
 
 export type AuthUser = {
   id: string;
@@ -24,6 +28,7 @@ export type AuthUser = {
   phone: string | null;
   roles: string[];
   sessionId: string;
+  sessionKind: AuthAudience;
 };
 
 export type MagicLinkRequestResult = {
@@ -37,6 +42,7 @@ type MagicLinkRecord = {
   emailNormalized: string;
   requestedName: string | null;
   returnTo: string | null;
+  audience: AuthAudience;
 };
 
 type UserRecord = {
@@ -54,6 +60,7 @@ type SessionRecord = {
   fullName: string;
   phone: string | null;
   roles: string | null;
+  kind: AuthAudience;
 };
 
 export class AuthConfigurationError extends Error {}
@@ -95,19 +102,67 @@ function canonicalOrigin(request: Request): string {
   return requestUrl.origin;
 }
 
+function assertEmailDeliveryAvailable(request: Request): void {
+  const requestUrl = new URL(request.url);
+  const local = ["localhost", "127.0.0.1", "[::1]"].includes(requestUrl.hostname);
+  const mode = runtimeValue("EMAIL_DELIVERY_MODE") || (local ? "log" : "");
+  if (mode === "log" && local) return;
+  if (!["test", "live"].includes(mode) || !runtimeValue("RESEND_API_KEY") || !runtimeValue("RESEND_FROM_EMAIL")) {
+    throw new AuthDeliveryError("AUTH_EMAIL_UNAVAILABLE");
+  }
+}
+
+async function provisionInitialAdmin(database: D1Database, email: string, ipHash: string): Promise<void> {
+  const bootstrapEmail = normalizeEmail(runtimeValue("INITIAL_ADMIN_EMAIL"));
+  if (!bootstrapEmail || bootstrapEmail !== email || !isValidEmail(bootstrapEmail)) return;
+
+  const adminCount = await database.prepare(`
+    SELECT COUNT(*) AS count FROM user_roles WHERE role = 'ADMIN'
+  `).first<{ count: number }>();
+  if (Number(adminCount?.count ?? 0) > 0) return;
+
+  const existing = await database.prepare(`
+    SELECT id, status FROM users WHERE email_normalized = ? LIMIT 1
+  `).bind(email).first<{ id: string; status: string }>();
+  if (existing && !["INVITED", "ACTIVE"].includes(existing.status)) return;
+
+  const userId = existing?.id ?? crypto.randomUUID();
+  const statements: D1PreparedStatement[] = [];
+  if (!existing) {
+    statements.push(database.prepare(`
+      INSERT INTO users (id, email, email_normalized, full_name, status)
+      VALUES (?, ?, ?, ?, 'INVITED')
+    `).bind(userId, email, email, fallbackDisplayName(email)));
+  }
+  statements.push(
+    database.prepare(`
+      INSERT OR IGNORE INTO user_roles (user_id, role) VALUES (?, 'ADMIN')
+    `).bind(userId),
+    database.prepare(`
+      INSERT INTO audit_events
+        (id, actor_type, action, entity_type, entity_id, ip_hash, metadata_json)
+      VALUES (?, 'SYSTEM', 'INITIAL_ADMIN_PROVISIONED', 'user', ?, ?, ?)
+    `).bind(crypto.randomUUID(), userId, ipHash, JSON.stringify({ source: "HOSTING_CONFIGURATION" })),
+  );
+  await database.batch(statements);
+}
+
 export async function requestMagicLink(
   request: Request,
-  input: { email?: unknown; fullName?: unknown; returnTo?: unknown },
+  input: { email?: unknown; fullName?: unknown; returnTo?: unknown; audience?: AuthAudience },
 ): Promise<MagicLinkRequestResult> {
   const email = normalizeEmail(input.email);
   if (!isValidEmail(email)) throw new TypeError("EMAIL_INVALID");
 
-  const fullName = cleanDisplayName(input.fullName);
-  if (String(input.fullName ?? "").trim() && !fullName) throw new TypeError("FULL_NAME_INVALID");
+  const audience: AuthAudience = input.audience === "STAFF" ? "STAFF" : "CUSTOMER";
+  const fullName = audience === "CUSTOMER" ? cleanDisplayName(input.fullName) : null;
+  if (audience === "CUSTOMER" && String(input.fullName ?? "").trim() && !fullName) {
+    throw new TypeError("FULL_NAME_INVALID");
+  }
 
   const database = getDatabase();
   const secret = getAuthSecret();
-  const returnTo = safeReturnTo(input.returnTo);
+  const returnTo = safePortalReturnTo(input.returnTo, audience);
   const ipHash = await hashSecret(`ip:${getClientIp(request)}`, secret);
   const rateWindow = `-${MAGIC_LINK_RATE_WINDOW_MINUTES} minutes`;
   const [emailRate, ipRate] = await Promise.all([
@@ -137,12 +192,50 @@ export async function requestMagicLink(
     return { accepted: true, throttled: true };
   }
 
+  assertEmailDeliveryAvailable(request);
+
+  if (audience === "STAFF") await provisionInitialAdmin(database, email, ipHash);
+
+  const existingRoles = await database.prepare(`
+    SELECT GROUP_CONCAT(ur.role) AS roles, u.status
+    FROM users u
+    LEFT JOIN user_roles ur ON ur.user_id = u.id
+    WHERE u.email_normalized = ?
+    GROUP BY u.id
+    LIMIT 1
+  `).bind(email).first<{ roles: string | null; status: string }>();
+  const roleList = existingRoles?.roles?.split(",").filter(Boolean) ?? [];
+  const staffAllowed = Boolean(existingRoles && ["INVITED", "ACTIVE"].includes(existingRoles.status) && hasAnyStaffRole(roleList));
+  if (audience === "STAFF" && !staffAllowed) {
+    const deniedId = crypto.randomUUID();
+    const deniedHash = await hashSecret(`denied:${randomToken()}`, secret);
+    await database.batch([
+      database.prepare(`
+        INSERT INTO magic_link_tokens
+          (id, email_normalized, token_hash, purpose, audience, return_to, expires_at, used_at, requested_ip_hash)
+        VALUES (?, ?, ?, 'SIGN_IN', ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?)
+      `).bind(deniedId, email, deniedHash, audience, returnTo, ipHash),
+      database.prepare(`
+        INSERT INTO audit_events
+          (id, actor_type, action, entity_type, entity_id, ip_hash, metadata_json)
+        VALUES (?, 'SYSTEM', 'AUTH_PORTAL_REQUEST_REJECTED', 'authentication', ?, ?, ?)
+      `).bind(
+        crypto.randomUUID(),
+        deniedId,
+        ipHash,
+        JSON.stringify({ audience }),
+      ),
+    ]);
+    return { accepted: true };
+  }
+
   const token = randomToken();
   const tokenHash = await hashSecret(`magic:${token}`, secret);
   const tokenId = crypto.randomUUID();
   const notificationId = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + MAGIC_LINK_TTL_SECONDS * 1000).toISOString();
-  const magicLink = `${canonicalOrigin(request)}/auth/verifier?token=${encodeURIComponent(token)}`;
+  const portalQuery = audience === "STAFF" ? "&portail=entreprise" : "";
+  const magicLink = `${canonicalOrigin(request)}/auth/verifier?token=${encodeURIComponent(token)}${portalQuery}`;
   const notificationPayload = JSON.stringify({
     magicLinkRequestId: tokenId,
     expiresInMinutes: MAGIC_LINK_TTL_SECONDS / 60,
@@ -151,9 +244,9 @@ export async function requestMagicLink(
   await database.batch([
     database.prepare(`
       INSERT INTO magic_link_tokens
-        (id, email_normalized, requested_name, token_hash, purpose, return_to, expires_at, requested_ip_hash)
-      VALUES (?, ?, ?, ?, 'SIGN_IN', ?, ?, ?)
-    `).bind(tokenId, email, fullName, tokenHash, returnTo, expiresAt, ipHash),
+        (id, email_normalized, requested_name, token_hash, purpose, audience, return_to, expires_at, requested_ip_hash)
+      VALUES (?, ?, ?, ?, 'SIGN_IN', ?, ?, ?, ?)
+    `).bind(tokenId, email, fullName, tokenHash, audience, returnTo, expiresAt, ipHash),
     database.prepare(`
       INSERT INTO notification_outbox
         (id, channel, template, template_version, recipient, payload_json, status, idempotency_key)
@@ -167,7 +260,7 @@ export async function requestMagicLink(
       crypto.randomUUID(),
       tokenId,
       ipHash,
-      JSON.stringify({ expiresInSeconds: MAGIC_LINK_TTL_SECONDS }),
+      JSON.stringify({ expiresInSeconds: MAGIC_LINK_TTL_SECONDS, audience }),
     ),
   ]);
 
@@ -201,6 +294,7 @@ export async function verifyMagicLink(request: Request, token: string): Promise<
   token: string;
   returnTo: string;
   user: AuthUser;
+  maxAgeSeconds: number;
 }> {
   if (!/^[A-Za-z0-9_-]{40,180}$/u.test(token)) throw new InvalidMagicLinkError("MAGIC_LINK_INVALID");
 
@@ -210,7 +304,8 @@ export async function verifyMagicLink(request: Request, token: string): Promise<
   const ipHash = await hashSecret(`ip:${getClientIp(request)}`, secret);
   const userAgent = getUserAgent(request);
   const link = await database.prepare(`
-    SELECT id, email_normalized AS emailNormalized, requested_name AS requestedName, return_to AS returnTo
+    SELECT id, email_normalized AS emailNormalized, requested_name AS requestedName,
+           return_to AS returnTo, audience
     FROM magic_link_tokens
     WHERE token_hash = ? AND purpose = 'SIGN_IN' AND used_at IS NULL
       AND unixepoch(expires_at) > unixepoch()
@@ -227,12 +322,23 @@ export async function verifyMagicLink(request: Request, token: string): Promise<
     throw new DisabledAccountError("ACCOUNT_DISABLED");
   }
 
+  const storedRoles = user
+    ? await database.prepare(`SELECT role FROM user_roles WHERE user_id = ? ORDER BY role`).bind(user.id).all<{ role: string }>()
+    : { results: [] as Array<{ role: string }> };
+  const existingRoles = storedRoles.results.map(({ role }) => role);
+  if (link.audience === "STAFF" && (!user || !hasAnyStaffRole(existingRoles))) {
+    throw new InvalidMagicLinkError("STAFF_ACCESS_NOT_INVITED");
+  }
   const userId = user?.id ?? crypto.randomUUID();
   const fullName = link.requestedName ?? user?.fullName ?? fallbackDisplayName(link.emailNormalized);
+  const sessionKind = link.audience;
+  const roles = user ? [...existingRoles] : ["CUSTOMER"];
+  if (sessionKind === "CUSTOMER" && !roles.includes("CUSTOMER")) roles.push("CUSTOMER");
   const sessionId = crypto.randomUUID();
   const sessionToken = randomToken();
   const sessionHash = await hashSecret(`session:${sessionToken}`, secret);
-  const expiresAt = new Date(Date.now() + CUSTOMER_SESSION_TTL_SECONDS * 1000).toISOString();
+  const maxAgeSeconds = sessionKind === "STAFF" ? STAFF_SESSION_TTL_SECONDS : CUSTOMER_SESSION_TTL_SECONDS;
+  const expiresAt = new Date(Date.now() + maxAgeSeconds * 1000).toISOString();
   const statements: D1PreparedStatement[] = [
     database.prepare(`
       UPDATE magic_link_tokens SET used_at = CURRENT_TIMESTAMP
@@ -255,13 +361,18 @@ export async function verifyMagicLink(request: Request, token: string): Promise<
     `).bind(userId, link.emailNormalized, link.emailNormalized, fullName));
   }
 
+  if (sessionKind === "CUSTOMER") {
+    statements.push(
+      database.prepare(`
+        INSERT OR IGNORE INTO user_roles (user_id, role) VALUES (?, 'CUSTOMER')
+      `).bind(userId),
+      database.prepare(`
+        INSERT OR IGNORE INTO customer_profiles (user_id, customer_type) VALUES (?, 'INDIVIDUAL')
+      `).bind(userId),
+    );
+  }
+
   statements.push(
-    database.prepare(`
-      INSERT OR IGNORE INTO user_roles (user_id, role) VALUES (?, 'CUSTOMER')
-    `).bind(userId),
-    database.prepare(`
-      INSERT OR IGNORE INTO customer_profiles (user_id, customer_type) VALUES (?, 'INDIVIDUAL')
-    `).bind(userId),
     database.prepare(`
       UPDATE auth_sessions SET revoked_at = CURRENT_TIMESTAMP
       WHERE user_id = ? AND revoked_at IS NULL AND unixepoch(expires_at) <= unixepoch()
@@ -269,8 +380,8 @@ export async function verifyMagicLink(request: Request, token: string): Promise<
     database.prepare(`
       INSERT INTO auth_sessions
         (id, user_id, token_hash, kind, expires_at, ip_hash, user_agent)
-      VALUES (?, ?, ?, 'CUSTOMER', ?, ?, ?)
-    `).bind(sessionId, userId, sessionHash, expiresAt, ipHash, userAgent),
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(sessionId, userId, sessionHash, sessionKind, expiresAt, ipHash, userAgent),
     database.prepare(`
       INSERT INTO audit_events
         (id, actor_user_id, actor_type, action, entity_type, entity_id, ip_hash, metadata_json)
@@ -280,7 +391,7 @@ export async function verifyMagicLink(request: Request, token: string): Promise<
       userId,
       sessionId,
       ipHash,
-      JSON.stringify({ method: "MAGIC_LINK", kind: "CUSTOMER" }),
+      JSON.stringify({ method: "MAGIC_LINK", kind: sessionKind }),
     ),
   );
 
@@ -304,14 +415,16 @@ export async function verifyMagicLink(request: Request, token: string): Promise<
 
   return {
     token: sessionToken,
-    returnTo: safeReturnTo(link.returnTo),
+    returnTo: safePortalReturnTo(link.returnTo, sessionKind),
+    maxAgeSeconds,
     user: {
       id: userId,
       email: link.emailNormalized,
       fullName,
       phone: user?.phone ?? null,
-      roles: ["CUSTOMER"],
+      roles,
       sessionId,
+      sessionKind,
     },
   };
 }
@@ -323,7 +436,7 @@ export async function getSessionFromCookie(cookieHeader: string | null | undefin
   const database = getDatabase();
   const sessionHash = await hashSecret(`session:${sessionToken}`, getAuthSecret());
   const record = await database.prepare(`
-    SELECT s.id AS sessionId, u.id AS userId, u.email, u.full_name AS fullName, u.phone,
+    SELECT s.id AS sessionId, s.kind, u.id AS userId, u.email, u.full_name AS fullName, u.phone,
            GROUP_CONCAT(ur.role) AS roles
     FROM auth_sessions s
     JOIN users u ON u.id = s.user_id
@@ -347,6 +460,7 @@ export async function getSessionFromCookie(cookieHeader: string | null | undefin
     phone: record.phone,
     roles: record.roles?.split(",").filter(Boolean) ?? [],
     sessionId: record.sessionId,
+    sessionKind: record.kind,
   };
 }
 
