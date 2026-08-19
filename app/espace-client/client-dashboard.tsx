@@ -4,21 +4,24 @@ import Image from "next/image";
 import Link from "@/app/site-link";
 import { useState, type FormEvent } from "react";
 import type { CustomerProfile, Garden, TerrainSlope } from "@/modules/customer/service";
+import type { QuoteView } from "@/modules/quotes/service";
 
-const views = ["Accueil", "Mes interventions", "Mes jardins", "Factures & fiscalité", "Mon profil"] as const;
+const views = ["Accueil", "Mes devis", "Mes interventions", "Mes jardins", "Factures & fiscalité", "Mon profil"] as const;
 type View = typeof views[number];
 type RequestState = { kind: "idle" | "saving" | "success" | "error"; message?: string };
 
 const emptyGarden = (): Garden => ({ id: "", label: "", addressLabel: null, line1: "", line2: null, postalCode: "", city: "", surfaceM2: null, terrainSlope: "UNKNOWN", accessWidthCm: null, hasAnimals: false, parkingNotes: null, publicNotes: null });
 
-export function ClientDashboard({ initialProfile, initialGardens }: { initialProfile: CustomerProfile; initialGardens: Garden[] }) {
+export function ClientDashboard({ initialProfile, initialGardens, initialQuotes }: { initialProfile: CustomerProfile; initialGardens: Garden[]; initialQuotes: QuoteView[] }) {
   const [view, setView] = useState<View>("Accueil");
   const [profile, setProfile] = useState(initialProfile);
   const [gardens, setGardens] = useState(initialGardens);
+  const [quotes, setQuotes] = useState(initialQuotes);
   const firstName = profile.fullName.split(/\s+/u)[0] || "Bonjour";
   const initials = profile.fullName.split(/\s+/u).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "SP";
   return <main className="client-app"><aside className="client-nav"><Link href="/" aria-label="Sergeant Paysage, accueil"><Image src="/logo-sergeant-paysage-blanc.png" alt="Sergeant Paysage" width={1784} height={387} priority /></Link><nav aria-label="Espace client">{views.map((item) => <button type="button" key={item} className={view === item ? "active" : ""} onClick={() => setView(item)}>{item}</button>)}</nav><form action="/api/auth/sign-out" method="post"><button type="submit">Se déconnecter</button></form><Link href="/">← Retour au site</Link></aside><section className="client-content"><header><div><p>Espace client sécurisé</p><h1>Bonjour {firstName},</h1></div><span aria-label={`Compte de ${profile.fullName}`}>{initials}</span></header>
-    {view === "Accueil" && <AccountHome email={profile.email} gardenCount={gardens.length} openGardens={() => setView("Mes jardins")} />}
+    {view === "Accueil" && <AccountHome email={profile.email} gardenCount={gardens.length} quoteCount={quotes.filter(({ status }) => status === "PRICED" || status === "DRAFT").length} openGardens={() => setView("Mes jardins")} openQuotes={() => setView("Mes devis")} />}
+    {view === "Mes devis" && <Quotes quotes={quotes} onChange={setQuotes} />}
     {view === "Mes interventions" && <EmptySection title="Mes interventions" text="Vos prochaines interventions et leur suivi apparaîtront ici dès votre première réservation." action="Réserver une intervention" href="/reserver" />}
     {view === "Mes jardins" && <Gardens gardens={gardens} onChange={setGardens} />}
     {view === "Factures & fiscalité" && <EmptySection title="Factures & fiscalité" text="Vos factures, avoirs et attestations fiscales seront disponibles dans cet espace." />}
@@ -26,8 +29,22 @@ export function ClientDashboard({ initialProfile, initialGardens }: { initialPro
   </section></main>;
 }
 
-function AccountHome({ email, gardenCount, openGardens }: { email: string; gardenCount: number; openGardens: () => void }) {
-  return <><article className="account-ready-card"><div><span>Compte opérationnel</span><h2>Votre email est vérifié.</h2><p>{email}</p></div><i aria-hidden="true">✓</i></article><div className="account-start-grid"><article><span>Première étape</span><h3>Planifier une intervention</h3><p>Configurez votre besoin et choisissez votre créneau disponible.</p><Link href="/reserver">Commencer ma réservation →</Link></article><article><span>Mes adresses</span><h3>{gardenCount ? `${gardenCount} jardin${gardenCount > 1 ? "s" : ""} enregistré${gardenCount > 1 ? "s" : ""}` : "Ajoutez votre jardin"}</h3><p>Préparez l’adresse et les consignes utiles avant votre réservation.</p><button type="button" className="text-action" onClick={openGardens}>{gardenCount ? "Gérer mes jardins" : "Ajouter un jardin"} →</button></article></div></>;
+function AccountHome({ email, gardenCount, quoteCount, openGardens, openQuotes }: { email: string; gardenCount: number; quoteCount: number; openGardens: () => void; openQuotes: () => void }) {
+  return <><article className="account-ready-card"><div><span>Compte opérationnel</span><h2>Votre email est vérifié.</h2><p>{email}</p></div><i aria-hidden="true">✓</i></article><div className="account-start-grid"><article><span>Mes devis</span><h3>{quoteCount ? `${quoteCount} devis à reprendre` : "Planifier une intervention"}</h3><p>Vos devis sont conservés avec le tarif et toutes les réponses du configurateur.</p>{quoteCount ? <button type="button" className="text-action" onClick={openQuotes}>Voir mes devis →</button> : <Link href="/reserver">Commencer un devis →</Link>}</article><article><span>Mes adresses</span><h3>{gardenCount ? `${gardenCount} jardin${gardenCount > 1 ? "s" : ""} enregistré${gardenCount > 1 ? "s" : ""}` : "Ajoutez votre jardin"}</h3><p>Préparez l’adresse et les consignes utiles avant votre réservation.</p><button type="button" className="text-action" onClick={openGardens}>{gardenCount ? "Gérer mes jardins" : "Ajouter un jardin"} →</button></article></div></>;
+}
+
+function Quotes({ quotes, onChange }: { quotes: QuoteView[]; onChange: (quotes: QuoteView[]) => void }) {
+  const [state, setState] = useState<RequestState>({ kind: "idle" });
+  async function cancel(quote: QuoteView) {
+    if (!window.confirm(`Annuler le devis ${quote.publicReference} ?`)) return;
+    setState({ kind: "saving" });
+    const response = await fetch(`/api/quotes/${quote.id}`, { method: "DELETE" }).catch(() => null);
+    if (!response?.ok) return setState({ kind: "error", message: "Le devis n’a pas pu être annulé." });
+    onChange(quotes.map((item) => item.id === quote.id ? { ...item, status: "CANCELLED" } : item));
+    setState({ kind: "success", message: "Le devis a été annulé." });
+  }
+  const statusLabel: Record<string, string> = { DRAFT: "Brouillon", PRICED: "Tarif enregistré", EXPIRED: "Expiré", CANCELLED: "Annulé", SLOT_HELD: "Créneau provisoire", ACCEPTED: "Accepté" };
+  return <><div className="dashboard-heading"><div><h2 className="dashboard-title">Mes devis</h2><p>Retrouvez le tarif, les prestations et toutes les informations déjà renseignées.</p></div><Link className="button button-primary" href="/reserver">Nouveau devis <span>＋</span></Link></div>{state.message && <Status state={state} />}{!quotes.length ? <article className="client-empty"><span aria-hidden="true">◇</span><h3>Aucun devis enregistré.</h3><p>Commencez le configurateur : votre progression sera sauvegardée automatiquement.</p><Link className="button button-primary" href="/reserver">Créer mon premier devis <span>→</span></Link></article> : <div className="quote-grid">{quotes.map((quote) => <article className="quote-card" key={quote.id}><header><div><span>{statusLabel[quote.status] ?? quote.status}</span><h3>{quote.publicReference}</h3></div><strong>{new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(quote.totalTtcCents / 100)}</strong></header><p>{quote.tasks.map(({ label }) => label).join(" · ")}</p><small>Mis à jour le {new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium" }).format(new Date(quote.updatedAt))}</small><footer>{(quote.status === "PRICED" || quote.status === "DRAFT") && <><Link href={`/reserver?devis=${encodeURIComponent(quote.id)}`}>Reprendre le devis →</Link><button type="button" onClick={() => void cancel(quote)}>Annuler</button></>}</footer></article>)}</div>}</>;
 }
 
 function EmptySection({ title, text, action, href }: { title: string; text: string; action?: string; href?: string }) {

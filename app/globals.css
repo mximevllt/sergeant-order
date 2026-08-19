@@ -342,6 +342,10 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .form-grid label:first-child { grid-column: 1/-1; }
 .form-grid label { margin: 0; }
 .checkout-helper { margin: -6px 0 20px; color: var(--sage); font-size: 10px; }
+.saved-garden-picker { margin-bottom: 18px; display: block; color: var(--sage); font-size: 10px; }
+.saved-garden-picker select { width: 100%; min-height: 50px; margin-top: 7px; padding: 0 13px; color: var(--ink); background: white; border: 1px solid rgba(33,46,35,.16); border-radius: 8px; font: inherit; }
+.quote-save-state { margin: 16px 0; padding: 13px 15px; color: #29543b; background: #e6efe8; border-left: 3px solid #50775d; font-size: 10px; line-height: 1.5; }
+.quote-save-state.error { color: #6b2522; background: #f5e5e2; border-color: #9b443e; }
 .address-checkout .field-group { padding: 0; border: 0; }
 .checkout-address-card { margin-top: 14px; }
 .payment-head { display: flex; justify-content: space-between; align-items: baseline; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
@@ -605,6 +609,16 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .repeat-grid p, .garden-card p { margin-top: 8px; color: var(--sage); font-size: 10px; }
 .repeat-grid a, .garden-card button { margin-top: 25px; padding: 0 0 6px; display: inline-block; color: var(--bronze); background: transparent; border: 0; border-bottom: 1px solid var(--line); font-size: 9px; }
 .garden-grid { grid-template-columns: repeat(3,1fr); }
+.quote-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.quote-card { min-height: 230px; padding: 25px; display: flex; flex-direction: column; background: var(--paper); border: 1px solid rgba(33,46,35,.08); }
+.quote-card > header { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
+.quote-card > header span { color: var(--bronze); font-size: 8px; letter-spacing: .18em; text-transform: uppercase; }
+.quote-card h3 { margin-top: 7px; font-size: 23px; }
+.quote-card > header > strong { font-family: var(--display); font-size: 26px; white-space: nowrap; }
+.quote-card > p { margin-top: 28px; color: var(--ink); font-size: 11px; line-height: 1.55; }
+.quote-card > small { margin-top: 8px; color: var(--sage); font-size: 8px; }
+.quote-card footer { margin-top: auto; padding-top: 22px; display: flex; align-items: center; gap: 18px; }
+.quote-card footer a, .quote-card footer button { padding: 0 0 5px; color: var(--bronze); background: transparent; border: 0; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
 .garden-card { min-height: 245px; }
 .garden-card p { line-height: 1.6; }
 .garden-card dl { margin-top: 20px; padding-top: 15px; display: flex; gap: 28px; border-top: 1px solid var(--line); }
@@ -789,7 +803,7 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
   .confirm-card { grid-template-columns: 1fr; }
   .timeline span { font-size: 7px; }
   .client-nav nav { display: none; }
-  .repeat-grid, .garden-grid { grid-template-columns: 1fr; }
+  .repeat-grid, .garden-grid, .quote-grid { grid-template-columns: 1fr; }
   .next-visit { grid-template-columns: 1fr; }
   .invoice-list p { grid-template-columns: 1fr; gap: 6px; }
   .admin-stats { grid-template-columns: 1fr; }

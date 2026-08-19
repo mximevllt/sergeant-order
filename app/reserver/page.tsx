@@ -2,11 +2,18 @@
 
 import Image from "next/image";
 import Link from "@/app/site-link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type CatalogTask = { code: string; label: string; description: string; measurementKind: string; eligibleSap: boolean; sortOrder: number };
 type TotalData = { intervention: number; taskFee: number; detailFee: number; accessFee: number; evacuation: number; reduction: number; total: number; afterTax: number };
 type PricingResponse = { recommendedHalfDays: number; warnings: string[]; totals: TotalData; pricingVersion: { version: number; label: string } };
+type SavedQuote = { id: string; publicReference: string; status: string; contactEmail: string; contactPhone: string | null; gardenId: string | null; requestSnapshot: Record<string, unknown>; updatedAt: string };
+type GardenOption = { id: string; label: string; line1: string; line2: string | null; postalCode: string; city: string };
+type SaveState = "idle" | "saving" | "saved" | "error";
+type LocalDraft = { snapshot?: Record<string, unknown>; contact?: { fullName?: string; email?: string; phone?: string }; gardenId?: string };
+
+const DRAFT_KEY = "sergeant-paysage-booking-draft-v1";
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 
 const taskPresentation: Record<string, { title: string; image: string }> = {
   MOWING: { title: "Tondre la pelouse", image: "/images/tonte.jpg" },
@@ -42,6 +49,7 @@ export default function BookingPage() {
   const [catalogError, setCatalogError] = useState(false);
   const [selected, setSelected] = useState<string[]>(["MOWING", "HEDGE_TRIMMING"]);
   const [unknownNeed, setUnknownNeed] = useState(false);
+  const [unknownDescription, setUnknownDescription] = useState("");
   const [lawnSurface, setLawnSurface] = useState("250–500 m²");
   const [grass, setGrass] = useState("Entretenue");
   const [terrain, setTerrain] = useState("Plat");
@@ -62,13 +70,104 @@ export default function BookingPage() {
   const [distance, setDistance] = useState("< 20 m");
   const [passageWidth, setPassageWidth] = useState("> 1 m");
   const [animal, setAnimal] = useState(false);
+  const [notes, setNotes] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [gardens, setGardens] = useState<GardenOption[]>([]);
+  const [gardenId, setGardenId] = useState("");
   const [legal, setLegal] = useState(false);
   const [totals, setTotals] = useState<TotalData>(emptyTotals);
   const [recommended, setRecommended] = useState(2);
   const [pricingWarnings, setPricingWarnings] = useState<string[]>([]);
   const [pricingLabel, setPricingLabel] = useState("Chargement du barème…");
   const [pricingError, setPricingError] = useState(false);
+  const [pricedInputKey, setPricedInputKey] = useState("");
+  const [quoteReference, setQuoteReference] = useState("");
+  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [draftReady, setDraftReady] = useState(false);
   const lastRecommendationKey = useRef("");
+  const quoteIdRef = useRef("");
+  const createKey = useRef("");
+  const [clientRevision] = useState(() => Date.now());
+  const saveChain = useRef<Promise<SavedQuote | null>>(Promise.resolve(null));
+
+  const pricingInput = useMemo(() => ({
+    taskCodes: selected, halfDays: duration,
+    lawnSurfaceBand: ({ "< 100 m²": "UNDER_100", "100–250 m²": "FROM_100_TO_250", "250–500 m²": "FROM_250_TO_500", "500–1 000 m²": "FROM_500_TO_1000", "+ 1 000 m²": "OVER_1000" } as Record<string, string>)[lawnSurface],
+    grassState: ({ Entretenue: "MAINTAINED", Haute: "HIGH", "Très haute": "VERY_HIGH" } as Record<string, string>)[grass],
+    hedgeLengthM: hedgeLength,
+    hedgeHeightBand: ({ "< 1,5 m": "UNDER_1_5M", "1,5–2 m": "FROM_1_5_TO_2M", "2–2,5 m": "FROM_2_TO_2_5M", "2,5–3 m": "FROM_2_5_TO_3M", "+ 3 m": "OVER_3M" } as Record<string, string>)[hedgeHeight],
+    hedgeFaces: ({ Dessus: "TOP", "1 côté": "ONE_SIDE", "2 côtés": "TWO_SIDES", "3 faces": "THREE_FACES" } as Record<string, string>)[hedgeFaces],
+    greenWaste: waste === "emporter" ? "REMOVE_1_TO_2M3" : "LEAVE_ON_SITE",
+    customerPresence: !access.includes("sans moi"),
+    accessType: ({ "Portail ouvert": "OPEN_GATE", "Boîte à clés": "KEY_BOX", Code: "CODE", Autre: "OTHER" } as Record<string, string>)[accessType],
+    nearbyParking: parking === "Oui",
+    vehicleDistanceBand: ({ "< 20 m": "UNDER_20M", "20–50 m": "FROM_20_TO_50M", "> 50 m": "OVER_50M" } as Record<string, string>)[distance],
+    flexibleOnDay: flexible,
+  }), [selected, duration, lawnSurface, grass, hedgeLength, hedgeHeight, hedgeFaces, waste, access, accessType, parking, distance, flexible]);
+  const pricingInputKey = JSON.stringify(pricingInput);
+
+  function restoreSnapshot(snapshot: Record<string, unknown>) {
+    const stringValue = (key: string) => typeof snapshot[key] === "string" ? snapshot[key] as string : null;
+    const stringList = (key: string) => Array.isArray(snapshot[key]) ? (snapshot[key] as unknown[]).filter((item): item is string => typeof item === "string") : null;
+    const numberValue = (key: string) => Number.isFinite(Number(snapshot[key])) ? Number(snapshot[key]) : null;
+    const setters: Array<[string, (value: string) => void]> = [
+      ["address", setAddress], ["unknownDescription", setUnknownDescription], ["lawnSurface", setLawnSurface], ["grass", setGrass],
+      ["terrain", setTerrain], ["hedgeHeight", setHedgeHeight], ["hedgeFaces", setHedgeFaces], ["waste", setWaste],
+      ["scheduleMode", setScheduleMode], ["date", setDate], ["customDate", setCustomDate], ["slot", setSlot],
+      ["access", setAccess], ["accessType", setAccessType], ["parking", setParking], ["distance", setDistance],
+      ["passageWidth", setPassageWidth], ["notes", setNotes], ["fullName", setFullName],
+    ];
+    for (const [key, setter] of setters) { const value = stringValue(key); if (value !== null) setter(value); }
+    const restoredSelected = stringList("selected"); if (restoredSelected?.length) setSelected(restoredSelected);
+    const restoredPriority = stringList("priority"); if (restoredPriority?.length) setPriority(restoredPriority);
+    const restoredDuration = numberValue("duration"); if (restoredDuration) setDuration(restoredDuration);
+    const restoredLength = numberValue("hedgeLength"); if (restoredLength) setHedgeLength(restoredLength);
+    const restoredStep = numberValue("step"); if (restoredStep) setStep(Math.min(6, Math.max(1, restoredStep)));
+    if (typeof snapshot.unknownNeed === "boolean") setUnknownNeed(snapshot.unknownNeed);
+    if (typeof snapshot.flexible === "boolean") setFlexible(snapshot.flexible);
+    if (typeof snapshot.animal === "boolean") setAnimal(snapshot.animal);
+  }
+
+  useEffect(() => {
+    createKey.current = crypto.randomUUID();
+    const controller = new AbortController();
+    void (async () => {
+      let local: LocalDraft | null = null;
+      try { local = JSON.parse(window.localStorage.getItem(DRAFT_KEY) ?? "null") as LocalDraft | null; } catch { local = null; }
+      if (local?.snapshot) restoreSnapshot(local.snapshot);
+      if (local?.contact) { setFullName(local.contact.fullName ?? ""); setEmail(local.contact.email ?? ""); setPhone(local.contact.phone ?? ""); }
+      if (local?.gardenId) setGardenId(local.gardenId);
+      const sessionResponse = await fetch("/api/auth/session", { signal: controller.signal }).catch(() => null);
+      const session = sessionResponse?.ok ? await sessionResponse.json() as { user?: { email: string; fullName: string; sessionKind: string } } : null;
+      if (session?.user?.sessionKind === "CUSTOMER") {
+        setEmail(session.user.email); setFullName(session.user.fullName);
+        const [profileResponse, gardensResponse] = await Promise.all([
+          fetch("/api/customer/profile", { signal: controller.signal }).catch(() => null),
+          fetch("/api/customer/gardens", { signal: controller.signal }).catch(() => null),
+        ]);
+        if (profileResponse?.ok) {
+          const data = await profileResponse.json() as { profile?: { phone?: string | null } };
+          if (data.profile?.phone) setPhone(data.profile.phone);
+        }
+        if (gardensResponse?.ok) {
+          const data = await gardensResponse.json() as { gardens?: GardenOption[] };
+          setGardens(data.gardens ?? []);
+        }
+      }
+
+      const requestedId = new URLSearchParams(window.location.search).get("devis");
+      const quoteResponse = await fetch(requestedId ? `/api/quotes/${encodeURIComponent(requestedId)}` : "/api/quotes/current", { signal: controller.signal }).catch(() => null);
+      if (quoteResponse?.ok) {
+        const { quote } = await quoteResponse.json() as { quote: SavedQuote };
+        restoreSnapshot(quote.requestSnapshot); quoteIdRef.current = quote.id; setQuoteReference(quote.publicReference);
+        setEmail(quote.contactEmail); setPhone(quote.contactPhone ?? ""); setGardenId(quote.gardenId ?? ""); setSaveState("saved");
+      }
+      setDraftReady(true);
+    })().catch(() => setDraftReady(true));
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
@@ -95,24 +194,10 @@ export default function BookingPage() {
     if (!tasks.length) return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      const body = {
-        taskCodes: selected, halfDays: duration,
-        lawnSurfaceBand: ({ "< 100 m²": "UNDER_100", "100–250 m²": "FROM_100_TO_250", "250–500 m²": "FROM_250_TO_500", "500–1 000 m²": "FROM_500_TO_1000", "+ 1 000 m²": "OVER_1000" } as Record<string, string>)[lawnSurface],
-        grassState: ({ Entretenue: "MAINTAINED", Haute: "HIGH", "Très haute": "VERY_HIGH" } as Record<string, string>)[grass],
-        hedgeLengthM: hedgeLength,
-        hedgeHeightBand: ({ "< 1,5 m": "UNDER_1_5M", "1,5–2 m": "FROM_1_5_TO_2M", "2–2,5 m": "FROM_2_TO_2_5M", "2,5–3 m": "FROM_2_5_TO_3M", "+ 3 m": "OVER_3M" } as Record<string, string>)[hedgeHeight],
-        hedgeFaces: ({ Dessus: "TOP", "1 côté": "ONE_SIDE", "2 côtés": "TWO_SIDES", "3 faces": "THREE_FACES" } as Record<string, string>)[hedgeFaces],
-        greenWaste: waste === "emporter" ? "REMOVE_1_TO_2M3" : "LEAVE_ON_SITE",
-        customerPresence: !access.includes("sans moi"),
-        accessType: ({ "Portail ouvert": "OPEN_GATE", "Boîte à clés": "KEY_BOX", Code: "CODE", Autre: "OTHER" } as Record<string, string>)[accessType],
-        nearbyParking: parking === "Oui",
-        vehicleDistanceBand: ({ "< 20 m": "UNDER_20M", "20–50 m": "FROM_20_TO_50M", "> 50 m": "OVER_50M" } as Record<string, string>)[distance],
-        flexibleOnDay: flexible,
-      };
-      fetch("/api/pricing/estimate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: controller.signal }).then(async (response) => {
+      fetch("/api/pricing/estimate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(pricingInput), signal: controller.signal }).then(async (response) => {
         if (!response.ok) throw new Error("PRICING_UNAVAILABLE");
         const quote = await response.json() as PricingResponse;
-        setTotals(quote.totals); setRecommended(quote.recommendedHalfDays); setPricingWarnings(quote.warnings); setPricingLabel(quote.pricingVersion.label); setPricingError(false);
+        setTotals(quote.totals); setRecommended(quote.recommendedHalfDays); setPricingWarnings(quote.warnings); setPricingLabel(quote.pricingVersion.label); setPricingError(false); setPricedInputKey(pricingInputKey);
         if (lastRecommendationKey.current !== recommendationKey) {
           lastRecommendationKey.current = recommendationKey;
           if (duration !== quote.recommendedHalfDays) setDuration(quote.recommendedHalfDays);
@@ -120,7 +205,57 @@ export default function BookingPage() {
       }).catch((error) => { if (error instanceof Error && error.name !== "AbortError") setPricingError(true); });
     }, 180);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [tasks.length, recommendationKey, duration, selected, lawnSurface, grass, hedgeLength, hedgeHeight, hedgeFaces, waste, access, accessType, parking, distance, flexible]);
+  }, [tasks.length, recommendationKey, duration, pricingInput, pricingInputKey]);
+
+  const draftSnapshot = useMemo(() => ({
+    schemaVersion: 1, clientRevision, step, address, selected, priority, unknownNeed, unknownDescription,
+    lawnSurface, grass, terrain, hedgeLength, hedgeHeight, hedgeFaces, duration, waste, scheduleMode, date, customDate,
+    slot, flexible, access, accessType, parking, distance, passageWidth, animal, notes, fullName,
+  }), [clientRevision, step, address, selected, priority, unknownNeed, unknownDescription, lawnSurface, grass, terrain, hedgeLength, hedgeHeight, hedgeFaces, duration, waste, scheduleMode, date, customDate, slot, flexible, access, accessType, parking, distance, passageWidth, animal, notes, fullName]);
+  const quotePayload = useMemo(() => ({ contact: { fullName, email, phone }, gardenId: gardenId || null, request: draftSnapshot, pricing: pricingInput }), [fullName, email, phone, gardenId, draftSnapshot, pricingInput]);
+  const quotePayloadKey = JSON.stringify(quotePayload);
+
+  useEffect(() => {
+    if (!draftReady) return;
+    const timer = window.setTimeout(() => {
+      window.localStorage.setItem(DRAFT_KEY, JSON.stringify({ snapshot: draftSnapshot, contact: { fullName, email, phone }, gardenId, savedAt: Date.now() }));
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [draftReady, draftSnapshot, fullName, email, phone, gardenId]);
+
+  function persistQuote(payload = quotePayload): Promise<SavedQuote | null> {
+    const run = async () => {
+      if (!EMAIL_PATTERN.test(payload.contact.email) || !payload.pricing.taskCodes.length || pricedInputKey !== JSON.stringify(payload.pricing)) return null;
+      setSaveState("saving");
+      const currentId = quoteIdRef.current;
+      const response = await fetch(currentId ? `/api/quotes/${encodeURIComponent(currentId)}` : "/api/quotes", {
+        method: currentId ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json", ...(currentId ? {} : { "Idempotency-Key": createKey.current }) },
+        body: JSON.stringify(payload),
+      }).catch(() => null);
+      if (!response?.ok) { setSaveState("error"); return null; }
+      const data = await response.json() as { quote: SavedQuote };
+      quoteIdRef.current = data.quote.id; setQuoteReference(data.quote.publicReference); setSaveState("saved");
+      return data.quote;
+    };
+    saveChain.current = saveChain.current.then(run, run);
+    return saveChain.current;
+  }
+
+  useEffect(() => {
+    if (!draftReady || pricedInputKey !== pricingInputKey || !EMAIL_PATTERN.test(email) || !selected.length) return;
+    const payload = JSON.parse(quotePayloadKey) as typeof quotePayload;
+    const timer = window.setTimeout(() => { void persistQuote(payload); }, 850);
+    return () => window.clearTimeout(timer);
+  // quotePayloadKey is the stable dependency for every persisted field.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftReady, pricedInputKey, pricingInputKey, email, selected.length, quotePayloadKey]);
+
+  async function finishQuote() {
+    if (!legal || !EMAIL_PATTERN.test(email) || !fullName.trim()) return;
+    const quote = await persistQuote();
+    if (quote) { window.localStorage.removeItem(DRAFT_KEY); window.location.assign(`/confirmation?devis=${encodeURIComponent(quote.id)}`); }
+  }
 
   const toggleTask = (name: string) => {
     setUnknownNeed(false);
@@ -156,18 +291,19 @@ export default function BookingPage() {
 
       <div className="booking-layout">
         <section className="booking-main" key={step}>
-          {step === 1 && <StepNeeds tasks={tasks} catalogError={catalogError} selected={selected} toggleTask={toggleTask} unknownNeed={unknownNeed} setUnknownNeed={setUnknownNeed} />}
+          {step === 1 && <StepNeeds tasks={tasks} catalogError={catalogError} selected={selected} toggleTask={toggleTask} unknownNeed={unknownNeed} setUnknownNeed={setUnknownNeed} unknownDescription={unknownDescription} setUnknownDescription={setUnknownDescription} />}
           {step === 2 && <StepDetails selected={selected} lawnSurface={lawnSurface} setLawnSurface={updateLawnSurface} grass={grass} setGrass={setGrass} terrain={terrain} setTerrain={setTerrain} hedgeLength={hedgeLength} setHedgeLength={setHedgeLength} hedgeHeight={hedgeHeight} setHedgeHeight={updateHedgeHeight} hedgeFaces={hedgeFaces} setHedgeFaces={setHedgeFaces} />}
           {step === 3 && <StepDuration duration={duration} setDuration={setDuration} recommended={recommended} priority={priority} taskLabel={taskLabel} warnings={pricingWarnings} movePriority={movePriority} waste={waste} setWaste={setWaste} />}
           {step === 4 && <StepSchedule mode={scheduleMode} setMode={setScheduleMode} date={date} setDate={setDate} customDate={customDate} setCustomDate={setCustomDate} slot={slot} setSlot={setSlot} flexible={flexible} setFlexible={setFlexible} />}
-          {step === 5 && <StepAccess access={access} setAccess={setAccess} accessType={accessType} setAccessType={setAccessType} parking={parking} setParking={setParking} distance={distance} setDistance={setDistance} passageWidth={passageWidth} setPassageWidth={setPassageWidth} animal={animal} setAnimal={setAnimal} />}
-          {step === 6 && <StepCheckout address={address} setAddress={setAddress} selected={selectedLabels} slot={slot} duration={duration} waste={waste} totals={totals} legal={legal} setLegal={setLegal} />}
+          {step === 5 && <StepAccess access={access} setAccess={setAccess} accessType={accessType} setAccessType={setAccessType} parking={parking} setParking={setParking} distance={distance} setDistance={setDistance} passageWidth={passageWidth} setPassageWidth={setPassageWidth} animal={animal} setAnimal={setAnimal} notes={notes} setNotes={setNotes} />}
+          {step === 6 && <StepCheckout address={address} setAddress={setAddress} selected={selectedLabels} slot={slot} duration={duration} waste={waste} totals={totals} legal={legal} setLegal={setLegal} fullName={fullName} setFullName={setFullName} email={email} setEmail={setEmail} phone={phone} setPhone={setPhone} gardens={gardens} gardenId={gardenId} setGardenId={setGardenId} />}
 
           {pricingError && <p className="pricing-error" role="alert">Le tarif n’a pas pu être recalculé. Vérifiez votre connexion avant de continuer.</p>}
+          {saveState !== "idle" && <p className={`quote-save-state${saveState === "error" ? " error" : ""}`} role={saveState === "error" ? "alert" : "status"}>{saveState === "saving" ? "Enregistrement sécurisé du devis…" : saveState === "saved" ? `Devis ${quoteReference} enregistré automatiquement.` : "Le devis n’a pas pu être enregistré. Vos réponses restent sauvegardées sur cet appareil."}</p>}
 
           <div className="booking-actions">
             {step === 1 ? <Link className="back-button" href="/">← Retour à l’accueil</Link> : <button className="back-button" onClick={goBack}>← Retour</button>}
-            {step < 6 ? <button className="button button-primary" onClick={goNext}>Continuer <span>→</span></button> : <a className={`button button-primary final-book${legal ? "" : " disabled"}`} href={legal ? "/confirmation" : undefined} aria-disabled={!legal}>Réserver — {totals.total} € à payer après intervention</a>}
+            {step < 6 ? <button className="button button-primary" onClick={goNext}>Continuer <span>→</span></button> : <button type="button" className={`button button-primary final-book${legal && EMAIL_PATTERN.test(email) && fullName.trim() ? "" : " disabled"}`} disabled={!legal || !EMAIL_PATTERN.test(email) || !fullName.trim() || saveState === "saving"} onClick={() => void finishQuote()}>Enregistrer mon devis — {totals.total} € TTC</button>}
           </div>
         </section>
         <Summary address={address} selected={selected} taskLabel={taskLabel} lawnSurface={lawnSurface} hedgeLength={hedgeLength} hedgeHeight={hedgeHeight} duration={duration} waste={waste} totals={totals} pricingLabel={pricingLabel} />
@@ -175,7 +311,7 @@ export default function BookingPage() {
       <div className="mobile-price-bar">
         {step === 1 ? <Link className="mobile-back" href="/" aria-label="Retour à l’accueil">←</Link> : <button className="mobile-back" onClick={goBack} aria-label="Étape précédente">←</button>}
         <div><strong>{totals.total} €</strong><small>{durationLabel(duration)}</small></div>
-        {step < 6 ? <button onClick={goNext}>Continuer →</button> : <a className={!legal ? "disabled" : ""} href={legal ? "/confirmation" : undefined}>Réserver</a>}
+        {step < 6 ? <button onClick={goNext}>Continuer →</button> : <button className={!legal || !EMAIL_PATTERN.test(email) || !fullName.trim() ? "disabled" : ""} disabled={!legal || !EMAIL_PATTERN.test(email) || !fullName.trim()} onClick={() => void finishQuote()}>Enregistrer</button>}
       </div>
     </main>
   );
@@ -193,7 +329,7 @@ function AddressFields({ address, setAddress }: { address: string; setAddress: (
   </>;
 }
 
-function StepNeeds({ tasks, catalogError, selected, toggleTask, unknownNeed, setUnknownNeed }: { tasks: CatalogTask[]; catalogError: boolean; selected: string[]; toggleTask: (v: string) => void; unknownNeed: boolean; setUnknownNeed: (v: boolean) => void }) {
+function StepNeeds({ tasks, catalogError, selected, toggleTask, unknownNeed, setUnknownNeed, unknownDescription, setUnknownDescription }: { tasks: CatalogTask[]; catalogError: boolean; selected: string[]; toggleTask: (v: string) => void; unknownNeed: boolean; setUnknownNeed: (v: boolean) => void; unknownDescription: string; setUnknownDescription: (v: string) => void }) {
   const openUnknown = () => {
     setUnknownNeed(!unknownNeed);
     if (!unknownNeed) setTimeout(() => document.getElementById("unknown-description")?.focus(), 50);
@@ -204,7 +340,7 @@ function StepNeeds({ tasks, catalogError, selected, toggleTask, unknownNeed, set
     {!tasks.length && !catalogError && <p className="catalog-loading" role="status">Chargement des prestations disponibles…</p>}
     <div className="task-grid">{tasks.map((task) => { const presentation = taskPresentation[task.code] ?? { title: task.label, image: "/images/entretien.jpg" }; return <button type="button" key={task.code} className={selected.includes(task.code) ? "task-card selected" : "task-card"} onClick={() => toggleTask(task.code)} aria-pressed={selected.includes(task.code)}><Image src={presentation.image} alt="" width={1000} height={668} sizes="(max-width: 600px) 110px, 150px" /><div><small>{task.label}</small><strong>{presentation.title}</strong><span>{task.description}</span></div><i>{selected.includes(task.code) ? "✓" : "+"}</i></button>; })}</div>
     <button type="button" className={`unknown-link${unknownNeed ? " selected" : ""}`} onClick={openUnknown} aria-expanded={unknownNeed}>Je ne sais pas exactement ce qu’il faut {unknownNeed ? "↑" : "→"}</button>
-    {unknownNeed && <div className="unknown-panel"><h2>Montrez-nous simplement le jardin.</h2><p>Décrivez ce que vous observez et ajoutez quelques photos. L’équipe préparera la mission à partir de ces éléments.</p><label htmlFor="unknown-description">Ce qu’il faudrait améliorer<textarea id="unknown-description" placeholder="Exemple : le jardin n’a pas été entretenu depuis plusieurs mois, je souhaite surtout qu’il soit remis au propre…" /></label><label className="unknown-upload"><input type="file" multiple accept="image/*" />+ Ajouter des photos</label></div>}
+    {unknownNeed && <div className="unknown-panel"><h2>Montrez-nous simplement le jardin.</h2><p>Décrivez ce que vous observez et ajoutez quelques photos. L’équipe préparera la mission à partir de ces éléments.</p><label htmlFor="unknown-description">Ce qu’il faudrait améliorer<textarea id="unknown-description" value={unknownDescription} onChange={(event) => setUnknownDescription(event.target.value)} placeholder="Exemple : le jardin n’a pas été entretenu depuis plusieurs mois, je souhaite surtout qu’il soit remis au propre…" /></label><label className="unknown-upload"><input type="file" multiple accept="image/*" />+ Ajouter des photos</label></div>}
   </>;
 }
 
@@ -254,26 +390,31 @@ function StepSchedule({ mode, setMode, date, setDate, customDate, setCustomDate,
   </>;
 }
 
-type AccessProps = { access: string; setAccess: (v: string) => void; accessType: string; setAccessType: (v: string) => void; parking: string; setParking: (v: string) => void; distance: string; setDistance: (v: string) => void; passageWidth: string; setPassageWidth: (v: string) => void; animal: boolean; setAnimal: (v: boolean) => void };
-function StepAccess({ access, setAccess, accessType, setAccessType, parking, setParking, distance, setDistance, passageWidth, setPassageWidth, animal, setAnimal }: AccessProps) {
+type AccessProps = { access: string; setAccess: (v: string) => void; accessType: string; setAccessType: (v: string) => void; parking: string; setParking: (v: string) => void; distance: string; setDistance: (v: string) => void; passageWidth: string; setPassageWidth: (v: string) => void; animal: boolean; setAnimal: (v: boolean) => void; notes: string; setNotes: (v: string) => void };
+function StepAccess({ access, setAccess, accessType, setAccessType, parking, setParking, distance, setDistance, passageWidth, setPassageWidth, animal, setAnimal, notes, setNotes }: AccessProps) {
   return <>
     <Intro eyebrow="Sur place" title="Comment accéder au jardin ?" copy="Chaque contrainte logistique affine légèrement le prix, sauf les animaux et la largeur du passage." />
     <div className="access-grid">{["Je serai sur place", "Le jardin est accessible sans moi"].map((item) => <button type="button" key={item} className={access === item ? "selected" : ""} onClick={() => setAccess(item)}><span>{item.startsWith("Je") ? "◎" : "⌂"}</span><strong>{item}</strong><i>{access === item ? "✓" : "+"}</i></button>)}</div>
     {access.includes("sans moi") && <div className="detail-card"><h2>Type d’accès</h2><Choice label="Choisissez une option" values={["Portail ouvert", "Boîte à clés", "Code", "Autre"]} value={accessType} setValue={setAccessType} />{accessType === "Code" && <div className="field-group compact"><label htmlFor="gate">Code du portail</label><input id="gate" type="password" autoComplete="off" placeholder="Votre code" /><label className="remember"><input type="checkbox" /> Conserver ces instructions pour mes prochaines interventions</label></div>}</div>}
     <div className="detail-card"><h2>Accès du matériel</h2><Choice label="Un utilitaire peut-il stationner à proximité ?" values={["Oui", "Non"]} value={parking} setValue={setParking} /><Choice label="Distance jusqu’au jardin" values={["< 20 m", "20–50 m", "> 50 m"]} value={distance} setValue={setDistance} /><Choice label="Largeur du passage le plus étroit" values={["> 1 m", "80 cm–1 m", "< 80 cm", "Je ne sais pas"]} value={passageWidth} setValue={setPassageWidth} /></div>
     <div className="animal-line"><span>Y a-t-il un chien ou un autre animal sur la propriété ?</span><button type="button" className={!animal ? "selected" : ""} onClick={() => setAnimal(false)}>Non</button><button type="button" className={animal ? "selected" : ""} onClick={() => setAnimal(true)}>Oui</button></div>
-    <div className="field-group"><label htmlFor="notes">Une information utile à ajouter ? <span>Facultatif</span></label><textarea id="notes" maxLength={500} placeholder="Exemple : sonnette en panne, portail à pousser fort, attention au système d’arrosage près de la haie…" /></div>
+    <div className="field-group"><label htmlFor="notes">Une information utile à ajouter ? <span>Facultatif</span></label><textarea id="notes" maxLength={500} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Exemple : sonnette en panne, portail à pousser fort, attention au système d’arrosage près de la haie…" /></div>
   </>;
 }
 
-function StepCheckout({ address, setAddress, selected, slot, duration, waste, totals, legal, setLegal }: { address: string; setAddress: (v: string) => void; selected: string[]; slot: string; duration: number; waste: string; totals: { total: number; afterTax: number }; legal: boolean; setLegal: (v: boolean) => void }) {
+function StepCheckout({ address, setAddress, selected, slot, duration, waste, totals, legal, setLegal, fullName, setFullName, email, setEmail, phone, setPhone, gardens, gardenId, setGardenId }: { address: string; setAddress: (v: string) => void; selected: string[]; slot: string; duration: number; waste: string; totals: { total: number; afterTax: number }; legal: boolean; setLegal: (v: boolean) => void; fullName: string; setFullName: (v: string) => void; email: string; setEmail: (v: string) => void; phone: string; setPhone: (v: string) => void; gardens: GardenOption[]; gardenId: string; setGardenId: (v: string) => void }) {
+  const chooseGarden = (id: string) => {
+    setGardenId(id);
+    const garden = gardens.find((item) => item.id === id);
+    if (garden) setAddress(`${garden.line1}${garden.line2 ? `, ${garden.line2}` : ""}, ${garden.postalCode} ${garden.city}`);
+  };
   return <>
-    <Intro eyebrow="Paiement" title="Dernière étape." copy="Réservez sans créer de compte. Un lien sécurisé vous sera envoyé par email." />
-    <div className="checkout-card"><h2>Vos coordonnées</h2><div className="form-grid"><label>Nom complet<input autoComplete="name" placeholder="Prénom Nom" /></label><label>Email<input type="email" autoComplete="email" placeholder="vous@exemple.fr" /></label><label>Téléphone mobile<input type="tel" autoComplete="tel" placeholder="06 00 00 00 00" /></label></div></div>
-    <div className="checkout-card address-checkout"><h2>Adresse du jardin</h2><p className="checkout-helper">Indiquez ici le lieu exact de l’intervention.</p><AddressFields address={address} setAddress={setAddress} /></div>
-    <div className="checkout-card"><div className="payment-head"><h2>Paiement</h2><span>🔒 Paiement sécurisé</span></div><button type="button" className="wallet-button">Pay <b>●</b></button><div className="or"><span>ou par carte bancaire</span></div><div className="fake-card"><label>Numéro de carte<input inputMode="numeric" autoComplete="cc-number" placeholder="1234  1234  1234  1234" /></label><label>Expiration<input inputMode="numeric" autoComplete="cc-exp" placeholder="MM / AA" /></label><label>CVC<input inputMode="numeric" autoComplete="cc-csc" placeholder="123" /></label></div><div className="no-charge"><strong>Vous ne serez pas débité aujourd’hui.</strong><p>Votre carte garantit la réservation. La prestation sera facturée après réalisation, conformément aux conditions d’annulation.</p></div><details className="promo"><summary>Ajouter un code avantage</summary><div><input aria-label="Code avantage" /><button type="button">Appliquer</button></div></details></div>
+    <Intro eyebrow="Votre devis" title="Dernière étape." copy="Enregistrez un devis ferme pendant 7 jours. Vous pourrez le reprendre sur cet appareil ou depuis votre espace client." />
+    <div className="checkout-card"><h2>Vos coordonnées</h2><div className="form-grid"><label>Nom complet<input required autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Prénom Nom" /></label><label>Email<input required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="vous@exemple.fr" /></label><label>Téléphone mobile<input type="tel" autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="06 00 00 00 00" /></label></div></div>
+    <div className="checkout-card address-checkout"><h2>Adresse du jardin</h2><p className="checkout-helper">Indiquez ici le lieu exact de l’intervention.</p>{gardens.length > 0 && <label className="saved-garden-picker">Utiliser un jardin enregistré<select value={gardenId} onChange={(event) => chooseGarden(event.target.value)}><option value="">Nouvelle adresse</option>{gardens.map((garden) => <option key={garden.id} value={garden.id}>{garden.label} — {garden.postalCode} {garden.city}</option>)}</select></label>}<AddressFields address={address} setAddress={(value) => { setGardenId(""); setAddress(value); }} /></div>
+    <div className="checkout-card"><div className="payment-head"><h2>Validation du devis</h2><span>🔒 Données sécurisées</span></div><div className="no-charge"><strong>Aucun paiement et aucun créneau ne sont encore enregistrés.</strong><p>L’étape suivante permettra de vérifier une disponibilité réelle puis de mettre en place le paiement sécurisé. Aucune donnée bancaire n’est demandée dans ce formulaire.</p></div></div>
     <div className="final-summary"><h2>Récapitulatif final</h2><p><strong>Créneau choisi · {slot}</strong><br />{address}</p><p>{selected.join(" · ")}<br />{longDurationLabel(duration)} · {waste === "emporter" ? "Évacuation des déchets" : "Déchets laissés sur place"}</p><strong>Total : {totals.total} € TTC</strong><span>≈ {totals.afterTax} € après crédit d’impôt*</span></div>
-    <label className="legal-check"><input type="checkbox" checked={legal} onChange={(e) => setLegal(e.target.checked)} /><span>Je demande expressément que la prestation puisse commencer avant la fin du délai légal de rétractation et j’accepte les CGV.</span></label>
+    <label className="legal-check"><input type="checkbox" checked={legal} onChange={(e) => setLegal(e.target.checked)} /><span>Je confirme l’exactitude des informations et j’accepte que ce devis soit enregistré. Cette action ne réserve aucun créneau et ne déclenche aucun paiement.</span></label>
   </>;
 }
 

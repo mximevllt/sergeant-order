@@ -9,6 +9,7 @@ Application web de réservation de prestations de paysagisme, construite avec Ne
 - Turso/libSQL comme base SQLite distante pour conserver les 50 tables, les contraintes et les migrations existantes.
 - Drizzle ORM pour le schéma typé.
 - Authentification interne sans mot de passe par lien à usage unique.
+- Devis persistants, chiffrés côté serveur, reprenables et rattachables aux comptes et jardins.
 - Région Vercel principale : Paris (`cdg1`).
 
 Le projet ne contient plus de Worker Cloudflare, de liaison D1, de configuration Vite spécifique ni de métadonnée d’hébergement OpenAI Sites.
@@ -89,5 +90,6 @@ Le workflow `.github/workflows/ci.yml` vérifie automatiquement chaque pull requ
 - Les actions d’écriture vérifient l’origine de la requête.
 - Les rôles client, entreprise et terrain sont contrôlés côté serveur.
 - Le contenu financier et les événements d’audit sont protégés par des contraintes SQLite.
+- Le navigateur ne décide jamais du prix enregistré : le serveur recalcule chaque devis avec la version active du barème et en conserve l’empreinte.
 
-Consultez aussi `docs/11-migration-github-vercel.md` pour la checklist de bascule.
+Consultez aussi `docs/11-migration-github-vercel.md` pour la checklist de bascule et `docs/12-devis-persistants.md` pour le fonctionnement des devis.

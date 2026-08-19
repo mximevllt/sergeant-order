@@ -138,6 +138,56 @@ test("le catalogue et le calcul tarifaire utilisent la base libSQL", async () =>
   assert.equal(estimate.totals.afterTax, 358.5);
 });
 
+test("un devis anonyme est idempotent, protégé et reprenable", async () => {
+  const pricing = {
+    taskCodes: ["MOWING", "HEDGE_TRIMMING"], halfDays: 2,
+    lawnSurfaceBand: "FROM_250_TO_500", grassState: "MAINTAINED",
+    hedgeLengthM: 18, hedgeHeightBand: "FROM_1_5_TO_2M", hedgeFaces: "THREE_FACES",
+    greenWaste: "REMOVE_1_TO_2M3", customerPresence: true, accessType: "CODE",
+    nearbyParking: true, vehicleDistanceBand: "UNDER_20M", flexibleOnDay: false,
+  };
+  const body = JSON.stringify({
+    contact: { email: "devis@example.fr", phone: "06 10 20 30 40" },
+    request: { step: 6, address: "22 chemin des Consacs, 83170 Brignoles", selected: pricing.taskCodes, priority: pricing.taskCodes, fullName: "Client Devis", duration: 2 },
+    pricing,
+  });
+  const key = "quote-anonymous-test-0001";
+  const created = await request("/api/quotes", { method: "POST", headers: { "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json", "Idempotency-Key": key }, body });
+  assert.equal(created.status, 201);
+  const { quote } = await created.json();
+  assert.match(quote.publicReference, /^SP-DV-/u);
+  assert.equal(quote.totalTtcCents, 71700);
+  assert.equal(quote.tasks.length, 2);
+  const draftCookie = created.headers.get("set-cookie")?.split(";", 1)[0] ?? "";
+  assert.match(draftCookie, /^sp_quote_draft=/u);
+
+  const repeated = await request("/api/quotes", { method: "POST", headers: { "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json", "Idempotency-Key": key }, body });
+  assert.equal(repeated.status, 201);
+  assert.equal((await repeated.json()).quote.id, quote.id);
+  const conflicting = await request("/api/quotes", { method: "POST", headers: { "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json", "Idempotency-Key": key }, body: body.replace("Client Devis", "Autre Client") });
+  assert.equal(conflicting.status, 409);
+
+  const denied = await request(`/api/quotes/${quote.id}`, { accept: "application/json" });
+  assert.equal(denied.status, 404);
+  const resumed = await request(`/api/quotes/${quote.id}`, { headers: { Cookie: draftCookie }, accept: "application/json" });
+  assert.equal(resumed.status, 200);
+  const changed = JSON.parse(body);
+  changed.pricing.halfDays = 3;
+  changed.request.duration = 3;
+  const updated = await request(`/api/quotes/${quote.id}`, { method: "PATCH", headers: { Cookie: draftCookie, "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json" }, body: JSON.stringify(changed) });
+  assert.equal(updated.status, 200);
+  const updatedQuote = (await updated.json()).quote;
+  assert.equal(updatedQuote.id, quote.id);
+  assert.ok(updatedQuote.totalTtcCents > quote.totalTtcCents);
+  const confirmation = await request(`/confirmation?devis=${quote.id}`, { headers: { Cookie: draftCookie } });
+  assert.equal(confirmation.status, 200);
+  assert.match(await confirmation.text(), /Votre devis est enregistré/u);
+  const cancelled = await request(`/api/quotes/${quote.id}`, { method: "DELETE", headers: { Cookie: draftCookie, "Sec-Fetch-Site": "same-origin" } });
+  assert.equal(cancelled.status, 204);
+  const cancelledQuote = await request(`/api/quotes/${quote.id}`, { headers: { Cookie: draftCookie }, accept: "application/json" });
+  assert.equal((await cancelledQuote.json()).quote.status, "CANCELLED");
+});
+
 test("un client crée son compte, sa session, son profil et son jardin", async () => {
   const magicResponse = await request("/api/auth/magic-link/request", {
     method: "POST",
@@ -169,11 +219,30 @@ test("un client crée son compte, sa session, son profil et son jardin", async (
     }),
   });
   assert.equal(gardenResponse.status, 201);
+  const garden = (await gardenResponse.json()).garden;
+
+  const pricing = {
+    taskCodes: ["MOWING"], halfDays: 2,
+    lawnSurfaceBand: "FROM_500_TO_1000", grassState: "HIGH",
+    hedgeLengthM: 5, hedgeHeightBand: "UNDER_1_5M", hedgeFaces: "TOP",
+    greenWaste: "LEAVE_ON_SITE", customerPresence: true, accessType: "OPEN_GATE",
+    nearbyParking: true, vehicleDistanceBand: "UNDER_20M", flexibleOnDay: false,
+  };
+  const quoteResponse = await request("/api/quotes", {
+    method: "POST",
+    headers: { Cookie: cookie, "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json", "Idempotency-Key": "quote-customer-test-00001" },
+    body: JSON.stringify({ contact: { email: "ignored@example.fr" }, gardenId: garden.id, request: { step: 6, address: "22 chemin des Consacs, 83170 Brignoles", selected: ["MOWING"], priority: ["MOWING"], fullName: "Camille Jardinier", duration: 2 }, pricing }),
+  });
+  assert.equal(quoteResponse.status, 201);
+  const customerQuote = (await quoteResponse.json()).quote;
+  assert.equal(customerQuote.contactEmail, "camille@example.fr");
+  assert.equal(customerQuote.gardenId, garden.id);
   const dashboard = await request("/espace-client", { headers: { Cookie: cookie } });
   assert.equal(dashboard.status, 200);
   const html = await dashboard.text();
   assert.match(html, /Camille Jardinier/u);
   assert.match(html, /Maison de Brignoles/u);
+  assert.match(html, new RegExp(customerQuote.publicReference, "u"));
 });
 
 test("les métadonnées et les sources ne contiennent plus le starter Sites", async () => {
