@@ -516,6 +516,7 @@ export const scheduleReservations = sqliteTable("schedule_reservations", {
   updatedAt: updatedAt(),
 }, (table) => [
   uniqueIndex("uq_schedule_reservations_idempotency").on(table.idempotencyKey),
+  uniqueIndex("uq_schedule_reservations_quote_active_hold").on(table.quoteId).where(sql`${table.status} = 'ACTIVE' AND ${table.kind} = 'HOLD' AND ${table.quoteId} IS NOT NULL`),
   index("idx_schedule_reservations_quote").on(table.quoteId),
   index("idx_schedule_reservations_order").on(table.orderId),
   index("idx_schedule_reservations_expiry").on(table.status, table.expiresAt),

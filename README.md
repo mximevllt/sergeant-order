@@ -11,6 +11,7 @@ Application web de réservation de prestations de paysagisme, construite avec Ne
 - Authentification interne sans mot de passe par lien à usage unique.
 - Devis persistants, chiffrés côté serveur, reprenables et rattachables aux comptes et jardins.
 - Contrôle serveur de la zone desservie : tout le Var et listes communales versionnées jusqu’à Marseille et Nice.
+- Disponibilités calculées sur les deux équipes, leurs compétences, horaires et absences, avec verrou anti-double-réservation de 15 minutes.
 - Région Vercel principale : Paris (`cdg1`).
 
 Le projet ne contient plus de Worker Cloudflare, de liaison D1, de configuration Vite spécifique ni de métadonnée d’hébergement OpenAI Sites.
@@ -92,5 +93,6 @@ Le workflow `.github/workflows/ci.yml` vérifie automatiquement chaque pull requ
 - Les rôles client, entreprise et terrain sont contrôlés côté serveur.
 - Le contenu financier et les événements d’audit sont protégés par des contraintes SQLite.
 - Le navigateur ne décide jamais du prix enregistré : le serveur recalcule chaque devis avec la version active du barème et en conserve l’empreinte.
+- Le navigateur ne décide pas non plus qu’un créneau est libre : le serveur le recalcule avant l’écriture et l’unicité est garantie par la base.
 
-Consultez aussi `docs/11-migration-github-vercel.md` pour la checklist de bascule, `docs/12-devis-persistants.md` pour les devis et `docs/13-zones-intervention.md` pour le périmètre commercial.
+Consultez aussi `docs/11-migration-github-vercel.md` pour la checklist de bascule, `docs/12-devis-persistants.md` pour les devis, `docs/13-zones-intervention.md` pour le périmètre commercial et `docs/14-disponibilites-et-verrous.md` pour le planning réel.

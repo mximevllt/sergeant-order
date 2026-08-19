@@ -96,6 +96,30 @@ test("une équipe ne peut pas occuper deux fois la même demi-journée", async (
   database.close();
 });
 
+test("un devis ne peut porter qu’un seul verrou de planning actif", async () => {
+  const database = applyMigrations(await loadMigrations());
+  database.exec(`
+    INSERT INTO quotes
+      (id, public_reference, pricing_version_id, status, contact_email, request_snapshot, expires_at)
+      VALUES ('quote-hold-test', 'SP-DV-HOLD-TEST', 'pricing-2026-v1', 'PRICED', 'hold@example.fr', '{}', '2026-08-27T12:00:00Z');
+    INSERT INTO schedule_reservations
+      (id, quote_id, kind, status, expires_at, idempotency_key)
+      VALUES ('quote-hold-1', 'quote-hold-test', 'HOLD', 'ACTIVE', '2026-08-20T12:00:00Z', 'quote-hold-key-1');
+  `);
+  assert.throws(() => database.exec(`
+    INSERT INTO schedule_reservations
+      (id, quote_id, kind, status, expires_at, idempotency_key)
+      VALUES ('quote-hold-2', 'quote-hold-test', 'HOLD', 'ACTIVE', '2026-08-20T12:00:00Z', 'quote-hold-key-2');
+  `));
+  database.exec("UPDATE schedule_reservations SET status = 'RELEASED' WHERE id = 'quote-hold-1'");
+  database.exec(`
+    INSERT INTO schedule_reservations
+      (id, quote_id, kind, status, expires_at, idempotency_key)
+      VALUES ('quote-hold-2', 'quote-hold-test', 'HOLD', 'ACTIVE', '2026-08-20T12:00:00Z', 'quote-hold-key-2');
+  `);
+  database.close();
+});
+
 test("les événements d'audit sont réellement append-only", async () => {
   const database = applyMigrations(await loadMigrations());
   database.exec(`

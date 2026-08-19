@@ -155,6 +155,91 @@ test("la zone d'intervention est contrôlée par commune sur le serveur", async 
   }
 });
 
+test("les disponibilités respectent le délai, la fenêtre et les jours travaillés", async () => {
+  const requestedAt = Date.now();
+  const response = await request("/api/availability/search", {
+    method: "POST",
+    headers: { "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json" },
+    body: JSON.stringify({ address: "22 chemin des Consacs, 83170 Brignoles", taskCodes: ["MOWING", "HEDGE_TRIMMING"], halfDays: 2 }),
+  });
+  assert.equal(response.status, 200);
+  const availability = await response.json();
+  assert.equal(availability.timezone, "Europe/Paris");
+  assert.equal(availability.minimumLeadHours, 24);
+  assert.equal(availability.maximumAdvanceDays, 31);
+  assert.equal(availability.holdMinutes, 15);
+  assert.ok(availability.options.length > 0);
+  for (const option of availability.options) {
+    const startsAt = Date.parse(option.startsAt);
+    assert.ok(startsAt >= requestedAt + 24 * 60 * 60 * 1000 - 2_000);
+    assert.ok(startsAt <= requestedAt + 31 * 24 * 60 * 60 * 1000 + 2_000);
+    const weekday = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Paris", weekday: "short" }).format(new Date(startsAt));
+    assert.ok(["Mon", "Tue", "Wed", "Thu", "Fri"].includes(weekday));
+    assert.equal(option.halfDays, 2);
+    assert.ok(option.availableTeams >= 1 && option.availableTeams <= 2);
+  }
+});
+
+test("un créneau est bloqué sans double réservation puis libérable", async () => {
+  const pricing = {
+    taskCodes: ["MOWING"], halfDays: 1,
+    lawnSurfaceBand: "UNDER_100", grassState: "MAINTAINED",
+    hedgeLengthM: 5, hedgeHeightBand: "UNDER_1_5M", hedgeFaces: "TOP",
+    greenWaste: "LEAVE_ON_SITE", customerPresence: true, accessType: "OPEN_GATE",
+    nearbyParking: true, vehicleDistanceBand: "UNDER_20M", flexibleOnDay: false,
+  };
+  async function createHoldQuote(index) {
+    const response = await request("/api/quotes", {
+      method: "POST",
+      headers: { "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json", "Idempotency-Key": `schedule-quote-test-000${index}` },
+      body: JSON.stringify({
+        contact: { email: `planning-${index}@example.fr` },
+        request: { step: 6, address: "22 chemin des Consacs, 83170 Brignoles", selected: ["MOWING"], priority: ["MOWING"], fullName: `Client Planning ${index}`, duration: 1 },
+        pricing,
+      }),
+    });
+    assert.equal(response.status, 201);
+    return { quote: (await response.json()).quote, cookie: response.headers.get("set-cookie")?.split(";", 1)[0] ?? "" };
+  }
+  const availabilityResponse = await request("/api/availability/search", {
+    method: "POST",
+    headers: { "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json" },
+    body: JSON.stringify({ address: "83170 Brignoles", taskCodes: ["MOWING"], halfDays: 1 }),
+  });
+  const startsAt = (await availabilityResponse.json()).options[0].startsAt;
+  const [first, second, third] = await Promise.all([createHoldQuote(1), createHoldQuote(2), createHoldQuote(3)]);
+  async function hold(item, key) {
+    return request(`/api/quotes/${item.quote.id}/hold`, {
+      method: "POST",
+      headers: { Cookie: item.cookie, "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json", "Idempotency-Key": key },
+      body: JSON.stringify({ startsAt }),
+    });
+  }
+  const firstHold = await hold(first, "schedule-hold-test-00001");
+  assert.equal(firstHold.status, 201);
+  const firstHoldBody = await firstHold.json();
+  assert.equal(firstHoldBody.hold.startsAt, startsAt);
+  assert.equal(firstHoldBody.hold.halfDays, 1);
+  assert.ok(Date.parse(firstHoldBody.hold.expiresAt) > Date.now());
+  assert.equal((await hold(first, "schedule-hold-test-00001")).status, 201);
+
+  assert.equal((await hold(second, "schedule-hold-test-00002")).status, 201);
+  const unavailable = await hold(third, "schedule-hold-test-00003");
+  assert.equal(unavailable.status, 409);
+  assert.equal((await unavailable.json()).error, "SLOT_NO_LONGER_AVAILABLE");
+
+  const protectedHold = await request(`/api/quotes/${first.quote.id}/hold`, { headers: { Cookie: first.cookie }, accept: "application/json" });
+  assert.equal(protectedHold.status, 200);
+  assert.equal((await protectedHold.json()).hold.startsAt, startsAt);
+  const confirmation = await request(`/confirmation?devis=${first.quote.id}`, { headers: { Cookie: first.cookie } });
+  assert.equal(confirmation.status, 200);
+  assert.match(await confirmation.text(), /Votre créneau est bloqué/u);
+
+  const released = await request(`/api/quotes/${first.quote.id}/hold`, { method: "DELETE", headers: { Cookie: first.cookie, "Sec-Fetch-Site": "same-origin" } });
+  assert.equal(released.status, 204);
+  assert.equal((await hold(third, "schedule-hold-test-00004")).status, 201);
+});
+
 test("un devis anonyme est idempotent, protégé et reprenable", async () => {
   const pricing = {
     taskCodes: ["MOWING", "HEDGE_TRIMMING"], halfDays: 2,

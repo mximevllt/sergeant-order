@@ -12,6 +12,8 @@ type GardenOption = { id: string; label: string; line1: string; line2: string | 
 type SaveState = "idle" | "saving" | "saved" | "error";
 type LocalDraft = { snapshot?: Record<string, unknown>; contact?: { fullName?: string; email?: string; phone?: string }; gardenId?: string };
 type AreaStatus = { state: "checking" | "eligible" | "ineligible" | "error"; message: string; zoneName?: string };
+type AvailabilityOption = { startsAt: string; endsAt: string; localDate: string; period: "MORNING" | "AFTERNOON"; dateLabel: string; timeLabel: string; completionLabel: string; halfDays: number; availableTeams: number };
+type AvailabilityState = "idle" | "loading" | "ready" | "error";
 
 const DRAFT_KEY = "sergeant-paysage-booking-draft-v1";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
@@ -26,11 +28,6 @@ const taskPresentation: Record<string, { title: string; image: string }> = {
 };
 
 const emptyTotals: TotalData = { intervention: 0, taskFee: 0, detailFee: 0, accessFee: 0, evacuation: 0, reduction: 0, total: 0, afterTax: 0 };
-
-const datesByMode: Record<string, string[]> = {
-  soon: ["lun. 17", "mar. 18", "mer. 19", "jeu. 20", "ven. 21"],
-  week: ["lun. 17", "mar. 18", "mer. 19", "jeu. 20", "ven. 21", "sam. 22"],
-};
 
 function durationLabel(blocks: number) {
   if (blocks === 1) return "1/2 journée";
@@ -67,9 +64,15 @@ export default function BookingPage() {
   const [waste, setWaste] = useState("emporter");
   const [priority, setPriority] = useState<string[]>(["MOWING", "HEDGE_TRIMMING"]);
   const [scheduleMode, setScheduleMode] = useState("soon");
-  const [date, setDate] = useState("jeu. 20");
+  const [date, setDate] = useState("");
   const [customDate, setCustomDate] = useState("");
-  const [slot, setSlot] = useState("08:00 — 12:00");
+  const [slot, setSlot] = useState("");
+  const [selectedStart, setSelectedStart] = useState("");
+  const [availability, setAvailability] = useState<AvailabilityOption[]>([]);
+  const [availabilityState, setAvailabilityState] = useState<AvailabilityState>("idle");
+  const [availabilityMessage, setAvailabilityMessage] = useState("");
+  const [availabilityRefresh, setAvailabilityRefresh] = useState(0);
+  const [holding, setHolding] = useState(false);
   const [flexible, setFlexible] = useState(false);
   const [access, setAccess] = useState("Je serai sur place");
   const [accessType, setAccessType] = useState("Code");
@@ -97,6 +100,7 @@ export default function BookingPage() {
   const lastRecommendationKey = useRef("");
   const quoteIdRef = useRef("");
   const createKey = useRef("");
+  const holdKey = useRef("");
   const [clientRevision] = useState(() => Date.now());
   const saveChain = useRef<Promise<SavedQuote | null>>(Promise.resolve(null));
 
@@ -115,6 +119,7 @@ export default function BookingPage() {
     flexibleOnDay: flexible,
   }), [selected, duration, lawnSurface, grass, hedgeLength, hedgeHeight, hedgeFaces, waste, access, accessType, parking, distance, flexible]);
   const pricingInputKey = JSON.stringify(pricingInput);
+  const availabilityInputKey = JSON.stringify({ address, taskCodes: selected, halfDays: duration });
 
   function restoreSnapshot(snapshot: Record<string, unknown>) {
     const stringValue = (key: string) => typeof snapshot[key] === "string" ? snapshot[key] as string : null;
@@ -123,7 +128,7 @@ export default function BookingPage() {
     const setters: Array<[string, (value: string) => void]> = [
       ["address", setAddress], ["unknownDescription", setUnknownDescription], ["lawnSurface", setLawnSurface], ["grass", setGrass],
       ["terrain", setTerrain], ["hedgeHeight", setHedgeHeight], ["hedgeFaces", setHedgeFaces], ["waste", setWaste],
-      ["scheduleMode", setScheduleMode], ["date", setDate], ["customDate", setCustomDate], ["slot", setSlot],
+      ["scheduleMode", setScheduleMode], ["date", setDate], ["customDate", setCustomDate], ["slot", setSlot], ["selectedStart", setSelectedStart],
       ["access", setAccess], ["accessType", setAccessType], ["parking", setParking], ["distance", setDistance],
       ["passageWidth", setPassageWidth], ["notes", setNotes], ["fullName", setFullName],
     ];
@@ -140,6 +145,7 @@ export default function BookingPage() {
 
   useEffect(() => {
     createKey.current = crypto.randomUUID();
+    holdKey.current = crypto.randomUUID();
     const controller = new AbortController();
     void (async () => {
       let local: LocalDraft | null = null;
@@ -235,11 +241,55 @@ export default function BookingPage() {
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [address]);
 
+  useEffect(() => {
+    if (areaStatus.state !== "eligible" || !selected.length || duration < 1) {
+      const reset = window.setTimeout(() => {
+        setAvailability([]);
+        setAvailabilityState("idle");
+        setSelectedStart("");
+      }, 0);
+      return () => window.clearTimeout(reset);
+    }
+    const controller = new AbortController();
+    const input = JSON.parse(availabilityInputKey) as { address: string; taskCodes: string[]; halfDays: number };
+    const timer = window.setTimeout(() => {
+      setAvailabilityState("loading");
+      setAvailabilityMessage("");
+      fetch("/api/availability/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+        signal: controller.signal,
+      }).then(async (response) => {
+        const result = await response.json().catch(() => ({})) as { options?: AvailabilityOption[]; fields?: Record<string, string> };
+        if (!response.ok) throw new Error(Object.values(result.fields ?? {})[0] ?? "Les disponibilités n’ont pas pu être chargées.");
+        const options = result.options ?? [];
+        setAvailability(options);
+        setAvailabilityState("ready");
+        setAvailabilityMessage(options.length ? "" : "Aucun créneau compatible n’est disponible dans les 31 prochains jours.");
+        setSelectedStart((current) => {
+          const chosen = options.find(({ startsAt }) => startsAt === current) ?? options[0];
+          setDate(chosen?.localDate ?? "");
+          setSlot(chosen?.timeLabel ?? "");
+          return chosen?.startsAt ?? "";
+        });
+      }).catch((error) => {
+        if (error instanceof Error && error.name !== "AbortError") {
+          setAvailability([]);
+          setSelectedStart("");
+          setAvailabilityState("error");
+          setAvailabilityMessage(error.message || "Les disponibilités n’ont pas pu être chargées.");
+        }
+      });
+    }, 220);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [areaStatus.state, availabilityInputKey, availabilityRefresh, duration, selected.length]);
+
   const draftSnapshot = useMemo(() => ({
     schemaVersion: 1, clientRevision, step, address, selected, priority, unknownNeed, unknownDescription,
     lawnSurface, grass, terrain, hedgeLength, hedgeHeight, hedgeFaces, duration, waste, scheduleMode, date, customDate,
-    slot, flexible, access, accessType, parking, distance, passageWidth, animal, notes, fullName,
-  }), [clientRevision, step, address, selected, priority, unknownNeed, unknownDescription, lawnSurface, grass, terrain, hedgeLength, hedgeHeight, hedgeFaces, duration, waste, scheduleMode, date, customDate, slot, flexible, access, accessType, parking, distance, passageWidth, animal, notes, fullName]);
+    slot, selectedStart, flexible, access, accessType, parking, distance, passageWidth, animal, notes, fullName,
+  }), [clientRevision, step, address, selected, priority, unknownNeed, unknownDescription, lawnSurface, grass, terrain, hedgeLength, hedgeHeight, hedgeFaces, duration, waste, scheduleMode, date, customDate, slot, selectedStart, flexible, access, accessType, parking, distance, passageWidth, animal, notes, fullName]);
   const quotePayload = useMemo(() => ({ contact: { fullName, email, phone }, gardenId: gardenId || null, request: draftSnapshot, pricing: pricingInput }), [fullName, email, phone, gardenId, draftSnapshot, pricingInput]);
   const quotePayloadKey = JSON.stringify(quotePayload);
 
@@ -280,9 +330,29 @@ export default function BookingPage() {
   }, [draftReady, pricedInputKey, pricingInputKey, email, selected.length, quotePayloadKey]);
 
   async function finishQuote() {
-    if (!legal || !EMAIL_PATTERN.test(email) || !fullName.trim() || areaStatus.state !== "eligible") return;
+    if (!legal || !EMAIL_PATTERN.test(email) || !fullName.trim() || areaStatus.state !== "eligible" || !selectedStart) return;
+    setHolding(true);
+    setAvailabilityMessage("");
     const quote = await persistQuote();
-    if (quote) { window.localStorage.removeItem(DRAFT_KEY); window.location.assign(`/confirmation?devis=${encodeURIComponent(quote.id)}`); }
+    if (!quote) {
+      setHolding(false);
+      setAvailabilityMessage("Le devis n’a pas pu être enregistré. Vérifiez vos coordonnées puis réessayez.");
+      return;
+    }
+    const response = await fetch(`/api/quotes/${encodeURIComponent(quote.id)}/hold`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": holdKey.current },
+      body: JSON.stringify({ startsAt: selectedStart }),
+    }).catch(() => null);
+    if (!response?.ok) {
+      setHolding(false);
+      setStep(4);
+      setAvailabilityMessage(response?.status === 409 ? "Ce créneau vient d’être pris. Les disponibilités ont été actualisées." : "Le créneau n’a pas pu être bloqué. Réessayez dans quelques instants.");
+      setAvailabilityRefresh((current) => current + 1);
+      return;
+    }
+    window.localStorage.removeItem(DRAFT_KEY);
+    window.location.assign(`/confirmation?devis=${encodeURIComponent(quote.id)}`);
   }
 
   const toggleTask = (name: string) => {
@@ -308,6 +378,9 @@ export default function BookingPage() {
   const goBack = () => setStep((current) => Math.max(1, current - 1));
   const taskLabel = (code: string) => tasks.find((task) => task.code === code)?.label ?? code;
   const selectedLabels = selected.map(taskLabel);
+  const selectedAvailability = availability.find(({ startsAt }) => startsAt === selectedStart) ?? null;
+  const canAdvance = step !== 4 || Boolean(selectedAvailability);
+  const canFinish = legal && EMAIL_PATTERN.test(email) && Boolean(fullName.trim()) && areaStatus.state === "eligible" && Boolean(selectedAvailability) && !holding;
 
   return (
     <main className="booking-page">
@@ -322,16 +395,16 @@ export default function BookingPage() {
           {step === 1 && <StepNeeds tasks={tasks} catalogError={catalogError} selected={selected} toggleTask={toggleTask} unknownNeed={unknownNeed} setUnknownNeed={setUnknownNeed} unknownDescription={unknownDescription} setUnknownDescription={setUnknownDescription} />}
           {step === 2 && <StepDetails selected={selected} lawnSurface={lawnSurface} setLawnSurface={updateLawnSurface} grass={grass} setGrass={setGrass} terrain={terrain} setTerrain={setTerrain} hedgeLength={hedgeLength} setHedgeLength={setHedgeLength} hedgeHeight={hedgeHeight} setHedgeHeight={updateHedgeHeight} hedgeFaces={hedgeFaces} setHedgeFaces={setHedgeFaces} />}
           {step === 3 && <StepDuration duration={duration} setDuration={setDuration} recommended={recommended} priority={priority} taskLabel={taskLabel} warnings={pricingWarnings} movePriority={movePriority} waste={waste} setWaste={setWaste} />}
-          {step === 4 && <StepSchedule mode={scheduleMode} setMode={setScheduleMode} date={date} setDate={setDate} customDate={customDate} setCustomDate={setCustomDate} slot={slot} setSlot={setSlot} flexible={flexible} setFlexible={setFlexible} />}
+          {step === 4 && <StepSchedule mode={scheduleMode} setMode={setScheduleMode} date={date} setDate={setDate} customDate={customDate} setCustomDate={setCustomDate} setSlot={setSlot} selectedStart={selectedStart} setSelectedStart={setSelectedStart} options={availability} state={availabilityState} message={availabilityMessage} flexible={flexible} setFlexible={setFlexible} />}
           {step === 5 && <StepAccess access={access} setAccess={setAccess} accessType={accessType} setAccessType={setAccessType} parking={parking} setParking={setParking} distance={distance} setDistance={setDistance} passageWidth={passageWidth} setPassageWidth={setPassageWidth} animal={animal} setAnimal={setAnimal} notes={notes} setNotes={setNotes} />}
-          {step === 6 && <StepCheckout address={address} setAddress={setAddress} selected={selectedLabels} slot={slot} duration={duration} waste={waste} totals={totals} legal={legal} setLegal={setLegal} fullName={fullName} setFullName={setFullName} email={email} setEmail={setEmail} phone={phone} setPhone={setPhone} gardens={gardens} gardenId={gardenId} setGardenId={setGardenId} areaStatus={areaStatus} />}
+          {step === 6 && <StepCheckout address={address} setAddress={setAddress} selected={selectedLabels} selectedAvailability={selectedAvailability} duration={duration} waste={waste} totals={totals} legal={legal} setLegal={setLegal} fullName={fullName} setFullName={setFullName} email={email} setEmail={setEmail} phone={phone} setPhone={setPhone} gardens={gardens} gardenId={gardenId} setGardenId={setGardenId} areaStatus={areaStatus} />}
 
           {pricingError && <p className="pricing-error" role="alert">Le tarif n’a pas pu être recalculé. Vérifiez votre connexion avant de continuer.</p>}
           {saveState !== "idle" && <p className={`quote-save-state${saveState === "error" ? " error" : ""}`} role={saveState === "error" ? "alert" : "status"}>{saveState === "saving" ? "Enregistrement sécurisé du devis…" : saveState === "saved" ? `Devis ${quoteReference} enregistré automatiquement.` : "Le devis n’a pas pu être enregistré. Vos réponses restent sauvegardées sur cet appareil."}</p>}
 
           <div className="booking-actions">
             {step === 1 ? <Link className="back-button" href="/">← Retour à l’accueil</Link> : <button className="back-button" onClick={goBack}>← Retour</button>}
-            {step < 6 ? <button className="button button-primary" onClick={goNext}>Continuer <span>→</span></button> : <button type="button" className={`button button-primary final-book${legal && EMAIL_PATTERN.test(email) && fullName.trim() && areaStatus.state === "eligible" ? "" : " disabled"}`} disabled={!legal || !EMAIL_PATTERN.test(email) || !fullName.trim() || areaStatus.state !== "eligible" || saveState === "saving"} onClick={() => void finishQuote()}>Enregistrer mon devis — {totals.total} € TTC</button>}
+            {step < 6 ? <button className={`button button-primary${canAdvance ? "" : " disabled"}`} disabled={!canAdvance} onClick={goNext}>Continuer <span>→</span></button> : <button type="button" className={`button button-primary final-book${canFinish ? "" : " disabled"}`} disabled={!canFinish || saveState === "saving"} onClick={() => void finishQuote()}>{holding ? "Blocage du créneau…" : `Bloquer ce créneau — ${totals.total} € TTC`}</button>}
           </div>
         </section>
         <Summary address={address} selected={selected} taskLabel={taskLabel} lawnSurface={lawnSurface} hedgeLength={hedgeLength} hedgeHeight={hedgeHeight} duration={duration} waste={waste} totals={totals} pricingLabel={pricingLabel} />
@@ -339,7 +412,7 @@ export default function BookingPage() {
       <div className="mobile-price-bar">
         {step === 1 ? <Link className="mobile-back" href="/" aria-label="Retour à l’accueil">←</Link> : <button className="mobile-back" onClick={goBack} aria-label="Étape précédente">←</button>}
         <div><strong>{totals.total} €</strong><small>{durationLabel(duration)}</small></div>
-        {step < 6 ? <button onClick={goNext}>Continuer →</button> : <button className={!legal || !EMAIL_PATTERN.test(email) || !fullName.trim() || areaStatus.state !== "eligible" ? "disabled" : ""} disabled={!legal || !EMAIL_PATTERN.test(email) || !fullName.trim() || areaStatus.state !== "eligible"} onClick={() => void finishQuote()}>Enregistrer</button>}
+        {step < 6 ? <button className={canAdvance ? "" : "disabled"} disabled={!canAdvance} onClick={goNext}>Continuer →</button> : <button className={canFinish ? "" : "disabled"} disabled={!canFinish} onClick={() => void finishQuote()}>{holding ? "Blocage…" : "Bloquer"}</button>}
       </div>
     </main>
   );
@@ -400,18 +473,45 @@ function StepDuration({ duration, setDuration, recommended, priority, taskLabel,
   </>;
 }
 
-function StepSchedule({ mode, setMode, date, setDate, customDate, setCustomDate, slot, setSlot, flexible, setFlexible }: { mode: string; setMode: (v: string) => void; date: string; setDate: (v: string) => void; customDate: string; setCustomDate: (v: string) => void; slot: string; setSlot: (v: string) => void; flexible: boolean; setFlexible: (v: boolean) => void }) {
+type ScheduleProps = { mode: string; setMode: (v: string) => void; date: string; setDate: (v: string) => void; customDate: string; setCustomDate: (v: string) => void; setSlot: (v: string) => void; selectedStart: string; setSelectedStart: (v: string) => void; options: AvailabilityOption[]; state: AvailabilityState; message: string; flexible: boolean; setFlexible: (v: boolean) => void };
+function StepSchedule({ mode, setMode, date, setDate, customDate, setCustomDate, setSlot, selectedStart, setSelectedStart, options, state, message, flexible, setFlexible }: ScheduleProps) {
+  const allDates = [...new Set(options.map(({ localDate }) => localDate))];
+  const visibleDates = mode === "soon" ? allDates.slice(0, 5) : allDates.slice(0, 7);
+  const dayOptions = options.filter(({ localDate }) => localDate === date);
+  const selectedOption = options.find(({ startsAt }) => startsAt === selectedStart) ?? null;
+  const selectOption = (option: AvailabilityOption | undefined) => {
+    setSelectedStart(option?.startsAt ?? "");
+    setSlot(option?.timeLabel ?? "");
+    if (option) setDate(option.localDate);
+  };
+  const selectDate = (nextDate: string) => {
+    setDate(nextDate);
+    selectOption(options.find(({ localDate }) => localDate === nextDate));
+  };
   const setSchedule = (next: string) => {
     setMode(next);
-    if (next !== "custom") setDate(datesByMode[next][next === "soon" ? 0 : 3]);
+    if (next === "custom") {
+      setCustomDate(date || allDates[0] || "");
+      return;
+    }
+    selectDate((next === "soon" ? allDates.slice(0, 5) : allDates.slice(0, 7))[0] ?? "");
   };
-  const displayDate = mode === "custom" && customDate ? new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" }).format(new Date(`${customDate}T12:00:00`)) : date;
+  const buttonParts = (value: string) => {
+    const parts = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", timeZone: "UTC" }).formatToParts(new Date(`${value}T12:00:00Z`));
+    return { weekday: parts.find(({ type }) => type === "weekday")?.value ?? "", day: parts.find(({ type }) => type === "day")?.value ?? "" };
+  };
+  const displayDate = selectedOption?.dateLabel ?? (date ? new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`)) : "Choisissez une date");
   return <>
-    <Intro eyebrow="Le planning" title="Quand voulez-vous que nous intervenions ?" copy="Les créneaux proposés correspondent aux disponibilités de nos équipes." />
+    <Intro eyebrow="Le planning réel" title="Quand voulez-vous que nous intervenions ?" copy="Chaque proposition tient compte des horaires, compétences, absences et réservations des deux équipes." />
     <div className="schedule-tabs"><button type="button" className={mode === "soon" ? "selected" : ""} onClick={() => setSchedule("soon")}>Au plus tôt</button><button type="button" className={mode === "week" ? "selected" : ""} onClick={() => setSchedule("week")}>Cette semaine</button><button type="button" className={mode === "custom" ? "selected" : ""} onClick={() => setSchedule("custom")}>Choisir une date</button></div>
-    {mode === "custom" ? <div className="custom-date"><label htmlFor="booking-date">Date souhaitée</label><input id="booking-date" type="date" min="2026-08-17" value={customDate} onChange={(e) => { setCustomDate(e.target.value); setDate(e.target.value); }} /></div> : <div className="date-strip">{datesByMode[mode].map((item) => <button type="button" key={item} className={date === item ? "selected" : ""} onClick={() => setDate(item)}>{item.split(" ")[0]}<strong>{item.split(" ")[1]}</strong></button>)}</div>}
-    <h2 className="selected-date">{displayDate || "Choisissez une date"}</h2>
-    <div className="slot-grid">{["08:00 — 12:00", "13:00 — 17:00"].map((item) => <button type="button" key={item} className={slot === item ? "selected" : ""} onClick={() => setSlot(item)}><strong>{item}</strong><span>{item.startsWith("08") ? "Matin" : "Après-midi"}</span></button>)}</div>
+    {state === "loading" && <p className="availability-status" role="status">Recherche des créneaux compatibles avec toute la durée de l’intervention…</p>}
+    {state !== "loading" && message && <p className="availability-status error" role="alert">{message}</p>}
+    {state === "ready" && options.length > 0 && <p className="availability-status success">✓ Disponibilités contrôlées en temps réel · réservation de 24 h à 31 jours à l’avance</p>}
+    {mode === "custom" ? <div className="custom-date"><label htmlFor="booking-date">Date souhaitée</label><input id="booking-date" type="date" min={allDates[0]} max={allDates.at(-1)} value={customDate} onChange={(event) => { const value = event.target.value; setCustomDate(value); selectDate(value); }} /></div> : <div className="date-strip">{visibleDates.map((item) => { const parts = buttonParts(item); return <button type="button" key={item} className={date === item ? "selected" : ""} onClick={() => selectDate(item)}>{parts.weekday}<strong>{parts.day}</strong></button>; })}</div>}
+    {options.length > 0 && <h2 className="selected-date">{displayDate}</h2>}
+    <div className="slot-grid">{dayOptions.map((option) => <button type="button" key={`${option.startsAt}-${option.endsAt}`} className={selectedStart === option.startsAt ? "selected" : ""} onClick={() => selectOption(option)}><strong>{option.timeLabel}</strong><span>{option.period === "MORNING" ? "Matin" : "Après-midi"} · {option.availableTeams} équipe{option.availableTeams > 1 ? "s" : ""} disponible{option.availableTeams > 1 ? "s" : ""}</span><small>{option.completionLabel}</small></button>)}</div>
+    {date && !dayOptions.length && state === "ready" && <p className="availability-status error">Aucune équipe n’est disponible à cette date pour toute la durée demandée.</p>}
+    {selectedOption && <div className="hold-notice"><strong>Ce créneau est disponible maintenant.</strong><p>Il sera bloqué pendant 15 minutes lorsque vous validerez la dernière étape, le temps de poursuivre vers le paiement.</p></div>}
     <label className="flexible-toggle"><span><strong>Je suis flexible sur la journée</strong><small>Nous choisissons matin ou après-midi et confirmons au plus tard 48 h avant.</small></span><b>−10 €</b><input type="checkbox" checked={flexible} onChange={(e) => setFlexible(e.target.checked)} /><i /></label>
     <div className="weather-note"><span>☁</span><div><strong>Et s’il pleut ?</strong><p>Si les conditions rendent l’intervention impossible ou inefficace, vous pourrez choisir gratuitement un nouveau créneau.</p></div></div>
   </>;
@@ -429,7 +529,7 @@ function StepAccess({ access, setAccess, accessType, setAccessType, parking, set
   </>;
 }
 
-function StepCheckout({ address, setAddress, selected, slot, duration, waste, totals, legal, setLegal, fullName, setFullName, email, setEmail, phone, setPhone, gardens, gardenId, setGardenId, areaStatus }: { address: string; setAddress: (v: string) => void; selected: string[]; slot: string; duration: number; waste: string; totals: { total: number; afterTax: number }; legal: boolean; setLegal: (v: boolean) => void; fullName: string; setFullName: (v: string) => void; email: string; setEmail: (v: string) => void; phone: string; setPhone: (v: string) => void; gardens: GardenOption[]; gardenId: string; setGardenId: (v: string) => void; areaStatus: AreaStatus }) {
+function StepCheckout({ address, setAddress, selected, selectedAvailability, duration, waste, totals, legal, setLegal, fullName, setFullName, email, setEmail, phone, setPhone, gardens, gardenId, setGardenId, areaStatus }: { address: string; setAddress: (v: string) => void; selected: string[]; selectedAvailability: AvailabilityOption | null; duration: number; waste: string; totals: { total: number; afterTax: number }; legal: boolean; setLegal: (v: boolean) => void; fullName: string; setFullName: (v: string) => void; email: string; setEmail: (v: string) => void; phone: string; setPhone: (v: string) => void; gardens: GardenOption[]; gardenId: string; setGardenId: (v: string) => void; areaStatus: AreaStatus }) {
   const chooseGarden = (id: string) => {
     setGardenId(id);
     const garden = gardens.find((item) => item.id === id);
@@ -439,9 +539,9 @@ function StepCheckout({ address, setAddress, selected, slot, duration, waste, to
     <Intro eyebrow="Votre devis" title="Dernière étape." copy="Enregistrez un devis ferme pendant 7 jours. Vous pourrez le reprendre sur cet appareil ou depuis votre espace client." />
     <div className="checkout-card"><h2>Vos coordonnées</h2><div className="form-grid"><label>Nom complet<input required autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Prénom Nom" /></label><label>Email<input required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="vous@exemple.fr" /></label><label>Téléphone mobile<input type="tel" autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="06 00 00 00 00" /></label></div></div>
     <div className="checkout-card address-checkout"><h2>Adresse du jardin</h2><p className="checkout-helper">Indiquez ici le lieu exact de l’intervention. La ville est contrôlée avec notre périmètre réel.</p>{gardens.length > 0 && <label className="saved-garden-picker">Utiliser un jardin enregistré<select value={gardenId} onChange={(event) => chooseGarden(event.target.value)}><option value="">Nouvelle adresse</option>{gardens.map((garden) => <option key={garden.id} value={garden.id}>{garden.label} — {garden.postalCode} {garden.city}</option>)}</select></label>}<AddressFields address={address} setAddress={(value) => { setGardenId(""); setAddress(value); }} areaStatus={areaStatus} /></div>
-    <div className="checkout-card"><div className="payment-head"><h2>Validation du devis</h2><span>🔒 Données sécurisées</span></div><div className="no-charge"><strong>Aucun paiement et aucun créneau ne sont encore enregistrés.</strong><p>L’étape suivante permettra de vérifier une disponibilité réelle puis de mettre en place le paiement sécurisé. Aucune donnée bancaire n’est demandée dans ce formulaire.</p></div></div>
-    <div className="final-summary"><h2>Récapitulatif final</h2><p><strong>Créneau choisi · {slot}</strong><br />{address}</p><p>{selected.join(" · ")}<br />{longDurationLabel(duration)} · {waste === "emporter" ? "Évacuation des déchets" : "Déchets laissés sur place"}</p><strong>Total : {totals.total} € TTC</strong><span>≈ {totals.afterTax} € après crédit d’impôt*</span></div>
-    <label className="legal-check"><input type="checkbox" checked={legal} onChange={(e) => setLegal(e.target.checked)} /><span>Je confirme l’exactitude des informations et j’accepte que ce devis soit enregistré. Cette action ne réserve aucun créneau et ne déclenche aucun paiement.</span></label>
+    <div className="checkout-card"><div className="payment-head"><h2>Validation du devis</h2><span>🔒 Données sécurisées</span></div><div className="no-charge"><strong>Le créneau sera protégé pendant 15 minutes.</strong><p>La validation enregistre le devis et pose un verrou temporaire anti-double-réservation. Aucun paiement n’est encore débité ; le paiement sécurisé sera raccordé à l’étape suivante.</p></div></div>
+    <div className="final-summary"><h2>Récapitulatif final</h2><p><strong>{selectedAvailability ? `${selectedAvailability.dateLabel} · ${selectedAvailability.timeLabel}` : "Aucun créneau disponible sélectionné"}</strong><br />{selectedAvailability?.completionLabel}<br />{address}</p><p>{selected.join(" · ")}<br />{longDurationLabel(duration)} · {waste === "emporter" ? "Évacuation des déchets" : "Déchets laissés sur place"}</p><strong>Total : {totals.total} € TTC</strong><span>≈ {totals.afterTax} € après crédit d’impôt*</span></div>
+    <label className="legal-check"><input type="checkbox" checked={legal} onChange={(e) => setLegal(e.target.checked)} /><span>Je confirme l’exactitude des informations et j’accepte l’enregistrement du devis ainsi que le blocage temporaire de ce créneau pendant 15 minutes. Aucun paiement n’est déclenché à cette étape.</span></label>
   </>;
 }
 

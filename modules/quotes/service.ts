@@ -127,6 +127,7 @@ function requestSnapshot(value: unknown, pricingInput: PricingInput): Record<str
     date: text(raw.date, 40),
     customDate: text(raw.customDate, 20),
     slot: text(raw.slot, 40),
+    selectedStart: text(raw.selectedStart, 40),
     flexible: pricingInput.flexibleOnDay,
     access: text(raw.access, 80),
     accessType: text(raw.accessType, 50),
@@ -317,6 +318,28 @@ async function accessibleRow(database: AppDatabase, quoteId: string, actor: Auth
     await database.prepare(`UPDATE quotes SET customer_user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND customer_user_id IS NULL`).bind(actor.id, row.id).run();
     row.customerUserId = actor.id;
   }
+  if (row.status === "SLOT_HELD") {
+    const activeHold = await database.prepare(`
+      SELECT id FROM schedule_reservations
+      WHERE quote_id = ? AND kind = 'HOLD' AND status = 'ACTIVE' AND expires_at > ? LIMIT 1
+    `).bind(row.id, new Date().toISOString()).first<{ id: string }>();
+    if (!activeHold) {
+      await database.batch([
+        database.prepare(`
+          UPDATE schedule_reservation_slots SET status = 'RELEASED'
+          WHERE status = 'ACTIVE' AND reservation_id IN (
+            SELECT id FROM schedule_reservations WHERE quote_id = ? AND kind = 'HOLD' AND status = 'ACTIVE'
+          )
+        `).bind(row.id),
+        database.prepare(`
+          UPDATE schedule_reservations SET status = 'EXPIRED', updated_at = CURRENT_TIMESTAMP
+          WHERE quote_id = ? AND kind = 'HOLD' AND status = 'ACTIVE'
+        `).bind(row.id),
+        database.prepare(`UPDATE quotes SET status = 'PRICED', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'SLOT_HELD'`).bind(row.id),
+      ]);
+      row.status = "PRICED";
+    }
+  }
   if (["DRAFT", "PRICED"].includes(row.status) && Date.parse(row.expiresAt) <= Date.now()) {
     await database.prepare(`UPDATE quotes SET status = 'EXPIRED', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status IN ('DRAFT', 'PRICED')`).bind(row.id).run();
     row.status = "EXPIRED";
@@ -393,12 +416,22 @@ export async function updateQuote(quoteId: string, value: unknown, actor: AuthUs
   const database = getDatabase();
   const current = await accessibleRow(database, quoteId, actor, provenDraftId);
   if (current.status === "EXPIRED") throw new QuoteExpiredError("QUOTE_EXPIRED");
-  if (!["DRAFT", "PRICED"].includes(current.status)) throw new QuoteConflictError("QUOTE_NOT_EDITABLE");
+  if (!["DRAFT", "PRICED", "SLOT_HELD"].includes(current.status)) throw new QuoteConflictError("QUOTE_NOT_EDITABLE");
   const prepared = await prepareQuote(value, actor);
   if (!current.customerUserId && normalizeEmail(current.contactEmail) !== prepared.contactEmail) throw new QuoteAccessError("QUOTE_EMAIL_MISMATCH");
   const priceSnapshot = pricingSnapshot(prepared);
   const priceFingerprint = await fingerprint({ quoteId, request: prepared.requestSnapshot, pricing: priceSnapshot });
   await database.batch([
+    database.prepare(`
+      UPDATE schedule_reservation_slots SET status = 'RELEASED'
+      WHERE status = 'ACTIVE' AND reservation_id IN (
+        SELECT id FROM schedule_reservations WHERE quote_id = ? AND kind = 'HOLD' AND status = 'ACTIVE'
+      )
+    `).bind(quoteId),
+    database.prepare(`
+      UPDATE schedule_reservations SET status = 'RELEASED', updated_at = CURRENT_TIMESTAMP
+      WHERE quote_id = ? AND kind = 'HOLD' AND status = 'ACTIVE'
+    `).bind(quoteId),
     database.prepare(`DELETE FROM quote_tasks WHERE quote_id = ?`).bind(quoteId),
     database.prepare(`DELETE FROM quote_adjustments WHERE quote_id = ?`).bind(quoteId),
     database.prepare(`
@@ -446,7 +479,7 @@ export async function getCurrentQuote(actor: AuthUser | null, provenDraftId: str
            subtotal_ht_cents AS subtotalHtCents, vat_cents AS vatCents, total_ttc_cents AS totalTtcCents,
            eligible_sap_cents AS eligibleSapCents, expires_at AS expiresAt,
            created_at AS createdAt, updated_at AS updatedAt
-    FROM quotes WHERE customer_user_id = ? AND status IN ('DRAFT', 'PRICED')
+    FROM quotes WHERE customer_user_id = ? AND status IN ('DRAFT', 'PRICED', 'SLOT_HELD')
     ORDER BY updated_at DESC LIMIT 1
   `).bind(actor.id).first<QuoteRecord>();
   return row ? recordToView(database, row) : null;
@@ -471,9 +504,19 @@ export async function listCustomerQuotes(userId: string): Promise<QuoteView[]> {
 export async function cancelQuote(quoteId: string, actor: AuthUser | null, provenDraftId: string | null): Promise<void> {
   const database = getDatabase();
   const current = await accessibleRow(database, quoteId, actor, provenDraftId);
-  if (["ACCEPTED", "SLOT_HELD"].includes(current.status)) throw new QuoteConflictError("QUOTE_NOT_CANCELLABLE");
+  if (current.status === "ACCEPTED") throw new QuoteConflictError("QUOTE_NOT_CANCELLABLE");
   if (current.status === "CANCELLED") return;
   await database.batch([
+    database.prepare(`
+      UPDATE schedule_reservation_slots SET status = 'RELEASED'
+      WHERE status = 'ACTIVE' AND reservation_id IN (
+        SELECT id FROM schedule_reservations WHERE quote_id = ? AND kind = 'HOLD' AND status = 'ACTIVE'
+      )
+    `).bind(quoteId),
+    database.prepare(`
+      UPDATE schedule_reservations SET status = 'CANCELLED', updated_at = CURRENT_TIMESTAMP
+      WHERE quote_id = ? AND kind = 'HOLD' AND status = 'ACTIVE'
+    `).bind(quoteId),
     database.prepare(`UPDATE quotes SET status = 'CANCELLED', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(quoteId),
     database.prepare(`
       INSERT INTO audit_events (id, actor_user_id, actor_type, action, entity_type, entity_id)
