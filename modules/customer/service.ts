@@ -1,5 +1,6 @@
 import { getDatabase } from "@/db/runtime";
 import type { PreparedStatement } from "@/db/database";
+import { requireServiceArea, ServiceAreaError } from "@/modules/service-area/service";
 
 export type CustomerType = "INDIVIDUAL" | "PROFESSIONAL";
 export type TerrainSlope = "FLAT" | "GENTLE" | "STEEP" | "UNKNOWN";
@@ -252,8 +253,17 @@ function normalizeGarden(input: unknown): Omit<Garden, "id"> {
   return { label, addressLabel: address.label, line1: address.line1, line2: address.line2, postalCode: address.postalCode, city: address.city, surfaceM2, terrainSlope, accessWidthCm, hasAnimals: value.hasAnimals === true, parkingNotes, publicNotes };
 }
 
+async function validateGardenServiceArea(data: Omit<Garden, "id">): Promise<void> {
+  try { await requireServiceArea({ postalCode: data.postalCode, city: data.city }); }
+  catch (error) {
+    if (error instanceof ServiceAreaError) throw new CustomerInputError("GARDEN_OUTSIDE_SERVICE_AREA", { "address.postalCode": error.result.message, "address.city": error.result.message });
+    throw error;
+  }
+}
+
 export async function createGarden(userId: string, input: unknown): Promise<Garden> {
   const data = normalizeGarden(input);
+  await validateGardenServiceArea(data);
   const db = getDatabase();
   const gardenId = crypto.randomUUID();
   const addressId = crypto.randomUUID();
@@ -271,6 +281,7 @@ export async function createGarden(userId: string, input: unknown): Promise<Gard
 export async function updateGarden(userId: string, gardenId: string, input: unknown): Promise<Garden> {
   if (!/^[a-f0-9-]{20,50}$/iu.test(gardenId)) throw new CustomerNotFoundError("GARDEN_NOT_FOUND");
   const data = normalizeGarden(input);
+  await validateGardenServiceArea(data);
   const db = getDatabase();
   const owned = await db.prepare(`SELECT address_id AS addressId FROM gardens WHERE id = ? AND owner_user_id = ? AND archived_at IS NULL LIMIT 1`).bind(gardenId, userId).first<{ addressId: string }>();
   if (!owned) throw new CustomerNotFoundError("GARDEN_NOT_FOUND");

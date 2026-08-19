@@ -209,7 +209,7 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .field-group input:not([type="checkbox"]), .form-grid input, .fake-card input, .field-group textarea { width: 100%; min-height: 54px; padding: 0 16px; color: var(--ink); background: white; border: 1px solid rgba(33,46,35,.2); border-radius: 10px; }
 .field-group textarea { min-height: 120px; padding-top: 15px; resize: vertical; }
 .field-group label span { float: right; color: var(--sage); font-size: 9px; font-weight: 300; }
-.location-link { margin-top: 16px; padding: 0; color: var(--bronze); background: none; border: 0; font-size: 10px; letter-spacing: .12em; cursor: pointer; }
+.location-link { margin-top: 12px; padding: 0; display: block; color: var(--bronze); background: none; border: 0; font-size: 9px; letter-spacing: .05em; }
 .address-card { margin-top: 12px; padding: 16px; display: grid; grid-template-columns: 155px 1fr; align-items: center; gap: 24px; background: var(--paper); border: 1px solid rgba(33,46,35,.1); }
 .mini-map { height: 105px; position: relative; overflow: hidden; background: #e5e2d7; }
 .mini-map::before, .mini-map::after, .mini-map i { content: ""; position: absolute; height: 1px; background: rgba(33,46,35,.25); transform: rotate(-24deg); }
@@ -348,6 +348,10 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .quote-save-state.error { color: #6b2522; background: #f5e5e2; border-color: #9b443e; }
 .address-checkout .field-group { padding: 0; border: 0; }
 .checkout-address-card { margin-top: 14px; }
+.checkout-address-card.area-ineligible, .checkout-address-card.area-error { border-color: rgba(155,68,62,.4); background: #f8eeeb; }
+.checkout-address-card.area-ineligible .mini-map b, .checkout-address-card.area-error .mini-map b { background: #9b443e; }
+.checkout-address-card.area-ineligible > div:last-child > span, .checkout-address-card.area-error > div:last-child > span { color: #8c3833; letter-spacing: .04em; text-transform: none; }
+.checkout-address-card.area-checking > div:last-child > span { color: var(--sage); }
 .payment-head { display: flex; justify-content: space-between; align-items: baseline; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
 .payment-head h2 { padding: 0; border: 0; }
 .payment-head span { color: var(--sage); font-size: 9px; }

@@ -161,6 +161,23 @@ test("les données de référence correspondent aux règles commerciales validé
   database.close();
 });
 
+test("les zones commerciales partielles contiennent uniquement les communes validées", async () => {
+  const database = applyMigrations(await loadMigrations());
+  assert.deepEqual(database.prepare(`
+    SELECT code, active FROM service_zones ORDER BY code
+  `).all().map((row) => ({ ...row })), [
+    { code: "ALPES_MARITIMES_TO_NICE", active: 1 },
+    { code: "BOUCHES_DU_RHONE_TO_MARSEILLE", active: 1 },
+    { code: "VAR_ALL", active: 1 },
+  ]);
+  assert.equal(database.prepare("SELECT count(DISTINCT insee_code) AS count FROM zone_municipalities WHERE zone_id = 'zone-bdr' AND included = 1").get().count, 30);
+  assert.equal(database.prepare("SELECT count(DISTINCT insee_code) AS count FROM zone_municipalities WHERE zone_id = 'zone-am' AND included = 1").get().count, 40);
+  assert.equal(database.prepare("SELECT count(*) AS count FROM zone_municipalities WHERE insee_code = '13055'").get().count, 16);
+  assert.equal(database.prepare("SELECT count(*) AS count FROM zone_municipalities WHERE city_name = 'Nice'").get().count, 4);
+  assert.equal(database.prepare("SELECT count(*) AS count FROM zone_municipalities WHERE city_name = 'Menton'").get().count, 0);
+  database.close();
+});
+
 test("les migrations d'authentification séparent les portails et ajoutent les index de limitation", async () => {
   const database = applyMigrations(await loadMigrations());
   const columns = database.prepare("PRAGMA table_info(magic_link_tokens)").all();

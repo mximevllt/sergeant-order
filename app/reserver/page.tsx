@@ -11,6 +11,7 @@ type SavedQuote = { id: string; publicReference: string; status: string; contact
 type GardenOption = { id: string; label: string; line1: string; line2: string | null; postalCode: string; city: string };
 type SaveState = "idle" | "saving" | "saved" | "error";
 type LocalDraft = { snapshot?: Record<string, unknown>; contact?: { fullName?: string; email?: string; phone?: string }; gardenId?: string };
+type AreaStatus = { state: "checking" | "eligible" | "ineligible" | "error"; message: string; zoneName?: string };
 
 const DRAFT_KEY = "sergeant-paysage-booking-draft-v1";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
@@ -40,6 +41,12 @@ function durationLabel(blocks: number) {
 
 function longDurationLabel(blocks: number) {
   return blocks === 1 ? "1 demi-journée" : durationLabel(blocks);
+}
+
+function serviceAreaParts(address: string): { postalCode: string; city: string } | null {
+  const matches = [...address.matchAll(/\b(\d{5})\s+([^,]+)/gu)];
+  const match = matches.at(-1);
+  return match ? { postalCode: match[1], city: match[2].trim() } : null;
 }
 
 export default function BookingPage() {
@@ -76,6 +83,7 @@ export default function BookingPage() {
   const [phone, setPhone] = useState("");
   const [gardens, setGardens] = useState<GardenOption[]>([]);
   const [gardenId, setGardenId] = useState("");
+  const [areaStatus, setAreaStatus] = useState<AreaStatus>({ state: "checking", message: "Vérification de la zone…" });
   const [legal, setLegal] = useState(false);
   const [totals, setTotals] = useState<TotalData>(emptyTotals);
   const [recommended, setRecommended] = useState(2);
@@ -207,6 +215,26 @@ export default function BookingPage() {
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [tasks.length, recommendationKey, duration, pricingInput, pricingInputKey]);
 
+  useEffect(() => {
+    const parts = serviceAreaParts(address);
+    if (!parts?.city) {
+      const incompleteTimer = window.setTimeout(() => setAreaStatus({ state: "ineligible", message: "Ajoutez le code postal et la ville pour vérifier la zone." }), 0);
+      return () => window.clearTimeout(incompleteTimer);
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setAreaStatus({ state: "checking", message: "Vérification de la zone…" });
+      fetch("/api/service-area/check", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(parts), signal: controller.signal })
+        .then(async (response) => {
+          if (!response.ok) throw new Error("SERVICE_AREA_UNAVAILABLE");
+          const result = await response.json() as { eligible: boolean; message: string; zone?: { name?: string } | null };
+          setAreaStatus({ state: result.eligible ? "eligible" : "ineligible", message: result.message, zoneName: result.zone?.name });
+        })
+        .catch((error) => { if (error instanceof Error && error.name !== "AbortError") setAreaStatus({ state: "error", message: "La zone n’a pas pu être vérifiée. Réessayez avant d’enregistrer le devis." }); });
+    }, 280);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [address]);
+
   const draftSnapshot = useMemo(() => ({
     schemaVersion: 1, clientRevision, step, address, selected, priority, unknownNeed, unknownDescription,
     lawnSurface, grass, terrain, hedgeLength, hedgeHeight, hedgeFaces, duration, waste, scheduleMode, date, customDate,
@@ -252,7 +280,7 @@ export default function BookingPage() {
   }, [draftReady, pricedInputKey, pricingInputKey, email, selected.length, quotePayloadKey]);
 
   async function finishQuote() {
-    if (!legal || !EMAIL_PATTERN.test(email) || !fullName.trim()) return;
+    if (!legal || !EMAIL_PATTERN.test(email) || !fullName.trim() || areaStatus.state !== "eligible") return;
     const quote = await persistQuote();
     if (quote) { window.localStorage.removeItem(DRAFT_KEY); window.location.assign(`/confirmation?devis=${encodeURIComponent(quote.id)}`); }
   }
@@ -296,14 +324,14 @@ export default function BookingPage() {
           {step === 3 && <StepDuration duration={duration} setDuration={setDuration} recommended={recommended} priority={priority} taskLabel={taskLabel} warnings={pricingWarnings} movePriority={movePriority} waste={waste} setWaste={setWaste} />}
           {step === 4 && <StepSchedule mode={scheduleMode} setMode={setScheduleMode} date={date} setDate={setDate} customDate={customDate} setCustomDate={setCustomDate} slot={slot} setSlot={setSlot} flexible={flexible} setFlexible={setFlexible} />}
           {step === 5 && <StepAccess access={access} setAccess={setAccess} accessType={accessType} setAccessType={setAccessType} parking={parking} setParking={setParking} distance={distance} setDistance={setDistance} passageWidth={passageWidth} setPassageWidth={setPassageWidth} animal={animal} setAnimal={setAnimal} notes={notes} setNotes={setNotes} />}
-          {step === 6 && <StepCheckout address={address} setAddress={setAddress} selected={selectedLabels} slot={slot} duration={duration} waste={waste} totals={totals} legal={legal} setLegal={setLegal} fullName={fullName} setFullName={setFullName} email={email} setEmail={setEmail} phone={phone} setPhone={setPhone} gardens={gardens} gardenId={gardenId} setGardenId={setGardenId} />}
+          {step === 6 && <StepCheckout address={address} setAddress={setAddress} selected={selectedLabels} slot={slot} duration={duration} waste={waste} totals={totals} legal={legal} setLegal={setLegal} fullName={fullName} setFullName={setFullName} email={email} setEmail={setEmail} phone={phone} setPhone={setPhone} gardens={gardens} gardenId={gardenId} setGardenId={setGardenId} areaStatus={areaStatus} />}
 
           {pricingError && <p className="pricing-error" role="alert">Le tarif n’a pas pu être recalculé. Vérifiez votre connexion avant de continuer.</p>}
           {saveState !== "idle" && <p className={`quote-save-state${saveState === "error" ? " error" : ""}`} role={saveState === "error" ? "alert" : "status"}>{saveState === "saving" ? "Enregistrement sécurisé du devis…" : saveState === "saved" ? `Devis ${quoteReference} enregistré automatiquement.` : "Le devis n’a pas pu être enregistré. Vos réponses restent sauvegardées sur cet appareil."}</p>}
 
           <div className="booking-actions">
             {step === 1 ? <Link className="back-button" href="/">← Retour à l’accueil</Link> : <button className="back-button" onClick={goBack}>← Retour</button>}
-            {step < 6 ? <button className="button button-primary" onClick={goNext}>Continuer <span>→</span></button> : <button type="button" className={`button button-primary final-book${legal && EMAIL_PATTERN.test(email) && fullName.trim() ? "" : " disabled"}`} disabled={!legal || !EMAIL_PATTERN.test(email) || !fullName.trim() || saveState === "saving"} onClick={() => void finishQuote()}>Enregistrer mon devis — {totals.total} € TTC</button>}
+            {step < 6 ? <button className="button button-primary" onClick={goNext}>Continuer <span>→</span></button> : <button type="button" className={`button button-primary final-book${legal && EMAIL_PATTERN.test(email) && fullName.trim() && areaStatus.state === "eligible" ? "" : " disabled"}`} disabled={!legal || !EMAIL_PATTERN.test(email) || !fullName.trim() || areaStatus.state !== "eligible" || saveState === "saving"} onClick={() => void finishQuote()}>Enregistrer mon devis — {totals.total} € TTC</button>}
           </div>
         </section>
         <Summary address={address} selected={selected} taskLabel={taskLabel} lawnSurface={lawnSurface} hedgeLength={hedgeLength} hedgeHeight={hedgeHeight} duration={duration} waste={waste} totals={totals} pricingLabel={pricingLabel} />
@@ -311,7 +339,7 @@ export default function BookingPage() {
       <div className="mobile-price-bar">
         {step === 1 ? <Link className="mobile-back" href="/" aria-label="Retour à l’accueil">←</Link> : <button className="mobile-back" onClick={goBack} aria-label="Étape précédente">←</button>}
         <div><strong>{totals.total} €</strong><small>{durationLabel(duration)}</small></div>
-        {step < 6 ? <button onClick={goNext}>Continuer →</button> : <button className={!legal || !EMAIL_PATTERN.test(email) || !fullName.trim() ? "disabled" : ""} disabled={!legal || !EMAIL_PATTERN.test(email) || !fullName.trim()} onClick={() => void finishQuote()}>Enregistrer</button>}
+        {step < 6 ? <button onClick={goNext}>Continuer →</button> : <button className={!legal || !EMAIL_PATTERN.test(email) || !fullName.trim() || areaStatus.state !== "eligible" ? "disabled" : ""} disabled={!legal || !EMAIL_PATTERN.test(email) || !fullName.trim() || areaStatus.state !== "eligible"} onClick={() => void finishQuote()}>Enregistrer</button>}
       </div>
     </main>
   );
@@ -321,11 +349,10 @@ function Intro({ eyebrow, title, copy }: { eyebrow: string; title: string; copy:
   return <div className="step-intro"><p>{eyebrow}</p><h1>{title}</h1><span>{copy}</span></div>;
 }
 
-function AddressFields({ address, setAddress }: { address: string; setAddress: (v: string) => void }) {
-  const [locating, setLocating] = useState(false);
+function AddressFields({ address, setAddress, areaStatus }: { address: string; setAddress: (v: string) => void; areaStatus: AreaStatus }) {
   return <>
-    <div className="field-group"><label htmlFor="address">Adresse du jardin</label><input id="address" autoComplete="street-address" value={address} onChange={(e) => setAddress(e.target.value)} /><button type="button" className="location-link" onClick={() => { setLocating(true); window.setTimeout(() => { setAddress("28 rue Jules Ferry, 83170 Brignoles"); setLocating(false); }, 500); }}>⌖ {locating ? "Localisation…" : "Utiliser ma position"}</button></div>
-    {address.length > 3 && <div className="address-card checkout-address-card"><div className="mini-map" aria-hidden="true"><i /><b>SP</b><span /></div><div><strong>{address.split(",")[0]}</strong><p>{address.split(",").slice(1).join(",") || "83170 Brignoles"}</p><span>✓ Zone desservie</span></div></div>}
+    <div className="field-group"><label htmlFor="address">Adresse du jardin</label><input id="address" autoComplete="street-address" value={address} onChange={(e) => setAddress(e.target.value)} aria-describedby="address-format" /><span id="address-format" className="location-link">Indiquez le code postal et la ville pour contrôler le secteur.</span></div>
+    {address.length > 3 && <div className={`address-card checkout-address-card area-${areaStatus.state}`}><div className="mini-map" aria-hidden="true"><i /><b>{areaStatus.state === "eligible" ? "SP" : "?"}</b><span /></div><div><strong>{address.split(",")[0]}</strong><p>{address.split(",").slice(1).join(",") || "Code postal et ville requis"}</p><span>{areaStatus.state === "checking" ? "… Vérification en cours" : areaStatus.state === "eligible" ? `✓ ${areaStatus.message}` : `! ${areaStatus.message}`}</span></div></div>}
   </>;
 }
 
@@ -402,7 +429,7 @@ function StepAccess({ access, setAccess, accessType, setAccessType, parking, set
   </>;
 }
 
-function StepCheckout({ address, setAddress, selected, slot, duration, waste, totals, legal, setLegal, fullName, setFullName, email, setEmail, phone, setPhone, gardens, gardenId, setGardenId }: { address: string; setAddress: (v: string) => void; selected: string[]; slot: string; duration: number; waste: string; totals: { total: number; afterTax: number }; legal: boolean; setLegal: (v: boolean) => void; fullName: string; setFullName: (v: string) => void; email: string; setEmail: (v: string) => void; phone: string; setPhone: (v: string) => void; gardens: GardenOption[]; gardenId: string; setGardenId: (v: string) => void }) {
+function StepCheckout({ address, setAddress, selected, slot, duration, waste, totals, legal, setLegal, fullName, setFullName, email, setEmail, phone, setPhone, gardens, gardenId, setGardenId, areaStatus }: { address: string; setAddress: (v: string) => void; selected: string[]; slot: string; duration: number; waste: string; totals: { total: number; afterTax: number }; legal: boolean; setLegal: (v: boolean) => void; fullName: string; setFullName: (v: string) => void; email: string; setEmail: (v: string) => void; phone: string; setPhone: (v: string) => void; gardens: GardenOption[]; gardenId: string; setGardenId: (v: string) => void; areaStatus: AreaStatus }) {
   const chooseGarden = (id: string) => {
     setGardenId(id);
     const garden = gardens.find((item) => item.id === id);
@@ -411,7 +438,7 @@ function StepCheckout({ address, setAddress, selected, slot, duration, waste, to
   return <>
     <Intro eyebrow="Votre devis" title="Dernière étape." copy="Enregistrez un devis ferme pendant 7 jours. Vous pourrez le reprendre sur cet appareil ou depuis votre espace client." />
     <div className="checkout-card"><h2>Vos coordonnées</h2><div className="form-grid"><label>Nom complet<input required autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Prénom Nom" /></label><label>Email<input required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="vous@exemple.fr" /></label><label>Téléphone mobile<input type="tel" autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="06 00 00 00 00" /></label></div></div>
-    <div className="checkout-card address-checkout"><h2>Adresse du jardin</h2><p className="checkout-helper">Indiquez ici le lieu exact de l’intervention.</p>{gardens.length > 0 && <label className="saved-garden-picker">Utiliser un jardin enregistré<select value={gardenId} onChange={(event) => chooseGarden(event.target.value)}><option value="">Nouvelle adresse</option>{gardens.map((garden) => <option key={garden.id} value={garden.id}>{garden.label} — {garden.postalCode} {garden.city}</option>)}</select></label>}<AddressFields address={address} setAddress={(value) => { setGardenId(""); setAddress(value); }} /></div>
+    <div className="checkout-card address-checkout"><h2>Adresse du jardin</h2><p className="checkout-helper">Indiquez ici le lieu exact de l’intervention. La ville est contrôlée avec notre périmètre réel.</p>{gardens.length > 0 && <label className="saved-garden-picker">Utiliser un jardin enregistré<select value={gardenId} onChange={(event) => chooseGarden(event.target.value)}><option value="">Nouvelle adresse</option>{gardens.map((garden) => <option key={garden.id} value={garden.id}>{garden.label} — {garden.postalCode} {garden.city}</option>)}</select></label>}<AddressFields address={address} setAddress={(value) => { setGardenId(""); setAddress(value); }} areaStatus={areaStatus} /></div>
     <div className="checkout-card"><div className="payment-head"><h2>Validation du devis</h2><span>🔒 Données sécurisées</span></div><div className="no-charge"><strong>Aucun paiement et aucun créneau ne sont encore enregistrés.</strong><p>L’étape suivante permettra de vérifier une disponibilité réelle puis de mettre en place le paiement sécurisé. Aucune donnée bancaire n’est demandée dans ce formulaire.</p></div></div>
     <div className="final-summary"><h2>Récapitulatif final</h2><p><strong>Créneau choisi · {slot}</strong><br />{address}</p><p>{selected.join(" · ")}<br />{longDurationLabel(duration)} · {waste === "emporter" ? "Évacuation des déchets" : "Déchets laissés sur place"}</p><strong>Total : {totals.total} € TTC</strong><span>≈ {totals.afterTax} € après crédit d’impôt*</span></div>
     <label className="legal-check"><input type="checkbox" checked={legal} onChange={(e) => setLegal(e.target.checked)} /><span>Je confirme l’exactitude des informations et j’accepte que ce devis soit enregistré. Cette action ne réserve aucun créneau et ne déclenche aucun paiement.</span></label>

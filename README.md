@@ -10,6 +10,7 @@ Application web de réservation de prestations de paysagisme, construite avec Ne
 - Drizzle ORM pour le schéma typé.
 - Authentification interne sans mot de passe par lien à usage unique.
 - Devis persistants, chiffrés côté serveur, reprenables et rattachables aux comptes et jardins.
+- Contrôle serveur de la zone desservie : tout le Var et listes communales versionnées jusqu’à Marseille et Nice.
 - Région Vercel principale : Paris (`cdg1`).
 
 Le projet ne contient plus de Worker Cloudflare, de liaison D1, de configuration Vite spécifique ni de métadonnée d’hébergement OpenAI Sites.
@@ -92,4 +93,4 @@ Le workflow `.github/workflows/ci.yml` vérifie automatiquement chaque pull requ
 - Le contenu financier et les événements d’audit sont protégés par des contraintes SQLite.
 - Le navigateur ne décide jamais du prix enregistré : le serveur recalcule chaque devis avec la version active du barème et en conserve l’empreinte.
 
-Consultez aussi `docs/11-migration-github-vercel.md` pour la checklist de bascule et `docs/12-devis-persistants.md` pour le fonctionnement des devis.
+Consultez aussi `docs/11-migration-github-vercel.md` pour la checklist de bascule, `docs/12-devis-persistants.md` pour les devis et `docs/13-zones-intervention.md` pour le périmètre commercial.

@@ -138,6 +138,23 @@ test("le catalogue et le calcul tarifaire utilisent la base libSQL", async () =>
   assert.equal(estimate.totals.afterTax, 358.5);
 });
 
+test("la zone d'intervention est contrôlée par commune sur le serveur", async () => {
+  const cases = [
+    [{ postalCode: "83170", city: "Brignoles" }, true, "VAR_ALL"],
+    [{ postalCode: "13008", city: "Marseille" }, true, "BOUCHES_DU_RHONE_TO_MARSEILLE"],
+    [{ postalCode: "06000", city: "Nice" }, true, "ALPES_MARITIMES_TO_NICE"],
+    [{ postalCode: "06500", city: "Menton" }, false, null],
+    [{ postalCode: "84000", city: "Avignon" }, false, null],
+  ];
+  for (const [body, eligible, zoneCode] of cases) {
+    const response = await request("/api/service-area/check", { method: "POST", headers: { "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.equal(result.eligible, eligible, JSON.stringify(body));
+    assert.equal(result.zone?.code ?? null, zoneCode, JSON.stringify(body));
+  }
+});
+
 test("un devis anonyme est idempotent, protégé et reprenable", async () => {
   const pricing = {
     taskCodes: ["MOWING", "HEDGE_TRIMMING"], halfDays: 2,
@@ -151,6 +168,11 @@ test("un devis anonyme est idempotent, protégé et reprenable", async () => {
     request: { step: 6, address: "22 chemin des Consacs, 83170 Brignoles", selected: pricing.taskCodes, priority: pricing.taskCodes, fullName: "Client Devis", duration: 2 },
     pricing,
   });
+  const outsideBody = JSON.parse(body);
+  outsideBody.request.address = "1 promenade du Soleil, 06500 Menton";
+  const outside = await request("/api/quotes", { method: "POST", headers: { "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json", "Idempotency-Key": "quote-outside-area-00001" }, body: JSON.stringify(outsideBody) });
+  assert.equal(outside.status, 400);
+  assert.match((await outside.json()).fields.address, /dehors de notre zone/u);
   const key = "quote-anonymous-test-0001";
   const created = await request("/api/quotes", { method: "POST", headers: { "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json", "Idempotency-Key": key }, body });
   assert.equal(created.status, 201);
@@ -220,6 +242,13 @@ test("un client crée son compte, sa session, son profil et son jardin", async (
   });
   assert.equal(gardenResponse.status, 201);
   const garden = (await gardenResponse.json()).garden;
+  const outsideGarden = await request("/api/customer/gardens", {
+    method: "POST",
+    headers: { Cookie: cookie, "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json" },
+    body: JSON.stringify({ label: "Hors secteur", address: { line1: "1 promenade du Soleil", postalCode: "06500", city: "Menton" }, terrainSlope: "FLAT" }),
+  });
+  assert.equal(outsideGarden.status, 400);
+  assert.equal((await outsideGarden.json()).error, "GARDEN_OUTSIDE_SERVICE_AREA");
 
   const pricing = {
     taskCodes: ["MOWING"], halfDays: 2,

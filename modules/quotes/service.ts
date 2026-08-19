@@ -4,6 +4,7 @@ import type { AuthUser } from "@/modules/auth/service";
 import { cleanDisplayName, isValidEmail, normalizeEmail } from "@/modules/auth/security.mjs";
 import { estimatePrice, normalizePricingInput, type Estimate } from "@/modules/pricing/service";
 import type { PricingInput, PriceLine } from "@/modules/pricing/engine";
+import { requireServiceArea, ServiceAreaError } from "@/modules/service-area/service";
 
 const QUOTE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const QUOTE_ID = /^[a-f0-9-]{20,50}$/iu;
@@ -152,18 +153,20 @@ async function prepareQuote(value: unknown, actor: AuthUser | null): Promise<Pre
   const requestedGardenId = text(raw.gardenId, 60) || null;
   let gardenId: string | null = null;
   let organizationId: string | null = null;
+  let registeredAddress: { postalCode: string; city: string } | null = null;
   if (requestedGardenId) {
     if (actor?.sessionKind !== "CUSTOMER") fields.gardenId = "Connectez-vous pour utiliser un jardin enregistré.";
     else {
       const garden = await getDatabase().prepare(`
-        SELECT g.id, g.organization_id AS organizationId
+        SELECT g.id, g.organization_id AS organizationId, a.postal_code AS postalCode, a.city
         FROM gardens g
+        JOIN addresses a ON a.id = g.address_id
         LEFT JOIN organization_memberships om ON om.organization_id = g.organization_id AND om.user_id = ?
         WHERE g.id = ? AND g.archived_at IS NULL AND (g.owner_user_id = ? OR om.user_id = ?)
         LIMIT 1
-      `).bind(actor.id, requestedGardenId, actor.id, actor.id).first<{ id: string; organizationId: string | null }>();
+      `).bind(actor.id, requestedGardenId, actor.id, actor.id).first<{ id: string; organizationId: string | null; postalCode: string; city: string }>();
       if (!garden) fields.gardenId = "Ce jardin n’est pas accessible depuis votre compte.";
-      else { gardenId = garden.id; organizationId = garden.organizationId; }
+      else { gardenId = garden.id; organizationId = garden.organizationId; registeredAddress = { postalCode: garden.postalCode, city: garden.city }; }
     }
   } else if (actor?.sessionKind === "CUSTOMER") {
     const membership = await getDatabase().prepare(`
@@ -189,6 +192,14 @@ async function prepareQuote(value: unknown, actor: AuthUser | null): Promise<Pre
   }));
   if (taskRows.length !== pricingInput.taskCodes.length) throw new QuoteInputError({ selected: "Une prestation n’est plus disponible." });
   const snapshot = requestSnapshot(raw.request, pricingInput);
+  try {
+    const area = await requireServiceArea(registeredAddress ?? snapshot.address);
+    snapshot.serviceArea = { zoneId: area.zone?.id, zoneCode: area.zone?.code, zoneName: area.zone?.name, postalCode: area.postalCode, matchedCity: area.matchedCity };
+  }
+  catch (error) {
+    if (error instanceof ServiceAreaError) throw new QuoteInputError({ address: error.result.message });
+    throw error;
+  }
   return {
     contactEmail,
     contactPhone,
