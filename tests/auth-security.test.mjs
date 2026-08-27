@@ -35,6 +35,9 @@ test("limite strictement les destinations après connexion", () => {
   assert.equal(safePortalReturnTo("/admin?vue=planning", "STAFF"), "/admin?vue=planning");
   assert.equal(safePortalReturnTo("/espace-client", "STAFF"), "/admin");
   assert.equal(safePortalReturnTo("/admin", "CUSTOMER"), "/espace-client");
+  assert.equal(safePortalReturnTo("/paiement?devis=abc", "CUSTOMER"), "/paiement?devis=abc");
+  assert.equal(safePortalReturnTo("/paiement/retour?commande=abc", "CUSTOMER"), "/paiement/retour?commande=abc");
+  assert.equal(safePortalReturnTo("/paiement", "STAFF"), "/admin");
 });
 
 test("génère des secrets imprévisibles et ne conserve que leur empreinte", async () => {

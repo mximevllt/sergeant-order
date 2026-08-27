@@ -110,6 +110,18 @@ test("Next.js sert les pages publiques et protège les portails", async () => {
   const admin = await request("/admin");
   assert.equal(admin.status, 307);
   assert.match(admin.headers.get("location") ?? "", /\/connexion-entreprise\?returnTo=/u);
+  const payment = await request("/paiement?devis=devis-inconnu");
+  assert.equal(payment.status, 307);
+  assert.match(decodeURIComponent(payment.headers.get("location") ?? ""), /returnTo=\/paiement\?devis=/u);
+  const protectedSetup = await request("/api/orders/payment-setup", {
+    method: "POST",
+    headers: { "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json", "Idempotency-Key": "payment-auth-test-00001" },
+    body: JSON.stringify({ quoteId: "devis-inconnu", consent: true }),
+    accept: "application/json",
+  });
+  assert.equal(protectedSetup.status, 401);
+  const forgedWebhook = await request("/api/webhooks/stripe", { method: "POST", headers: { "Content-Type": "application/json", "Stripe-Signature": "forged" }, body: "{}", accept: "application/json" });
+  assert.equal(forgedWebhook.status, 400);
 });
 
 test("le catalogue et le calcul tarifaire utilisent la base libSQL", async () => {
@@ -233,7 +245,10 @@ test("un créneau est bloqué sans double réservation puis libérable", async (
   assert.equal((await protectedHold.json()).hold.startsAt, startsAt);
   const confirmation = await request(`/confirmation?devis=${first.quote.id}`, { headers: { Cookie: first.cookie } });
   assert.equal(confirmation.status, 200);
-  assert.match(await confirmation.text(), /Votre créneau est bloqué/u);
+  const confirmationHtml = await confirmation.text();
+  assert.match(confirmationHtml, /Votre créneau est bloqué/u);
+  assert.match(confirmationHtml, /Se connecter pour confirmer/u);
+  assert.match(confirmationHtml, /Aucun débit à la réservation/u);
 
   const released = await request(`/api/quotes/${first.quote.id}/hold`, { method: "DELETE", headers: { Cookie: first.cookie, "Sec-Fetch-Site": "same-origin" } });
   assert.equal(released.status, 204);

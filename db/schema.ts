@@ -733,6 +733,7 @@ export const payments = sqliteTable("payments", {
   amountCents: integer("amount_cents").notNull(),
   currency: text("currency").notNull().default("EUR"),
   providerReference: text("provider_reference"),
+  providerPaymentMethodReference: text("provider_payment_method_reference"),
   idempotencyKey: text("idempotency_key").notNull(),
   failureCode: text("failure_code"),
   failureMessageSafe: text("failure_message_safe"),
@@ -743,6 +744,7 @@ export const payments = sqliteTable("payments", {
 }, (table) => [
   uniqueIndex("uq_payments_idempotency").on(table.idempotencyKey),
   uniqueIndex("uq_payments_provider_reference").on(table.method, table.providerReference).where(sql`${table.providerReference} IS NOT NULL`),
+  index("idx_payments_provider_payment_method").on(table.method, table.providerPaymentMethodReference).where(sql`${table.providerPaymentMethodReference} IS NOT NULL`),
   index("idx_payments_order_created").on(table.orderId, table.createdAt),
   index("idx_payments_status_updated").on(table.status, table.updatedAt),
   check("ck_payments_amount", sql`${table.amountCents} >= 0`),

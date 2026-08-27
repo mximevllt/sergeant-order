@@ -12,6 +12,7 @@ Application web de réservation de prestations de paysagisme, construite avec Ne
 - Devis persistants, chiffrés côté serveur, reprenables et rattachables aux comptes et jardins.
 - Contrôle serveur de la zone desservie : tout le Var et listes communales versionnées jusqu’à Marseille et Nice.
 - Disponibilités calculées sur les deux équipes, leurs compétences, horaires et absences, avec verrou anti-double-réservation de 15 minutes.
+- Commandes réelles et garantie bancaire Stripe par SetupIntent : aucun débit à la réservation, webhook signé et conversion durable du créneau dans le planning.
 - Région Vercel principale : Paris (`cdg1`).
 
 Le projet ne contient plus de Worker Cloudflare, de liaison D1, de configuration Vite spécifique ni de métadonnée d’hébergement OpenAI Sites.
@@ -64,9 +65,12 @@ AUTH_SECRET=secret-aleatoire-de-32-caracteres-minimum
 EMAIL_DELIVERY_MODE=test
 PAYMENT_MODE=test
 AICI_MODE=test
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
 ```
 
-Les intégrations Resend, Stripe, Urssaf, Sentry et Turnstile sont contrôlées par les fichiers d’environnement mais seront réellement activées dans leurs étapes fonctionnelles respectives. Le mode production refuse les configurations incomplètes ou les clés Stripe de test.
+Stripe est maintenant raccordé. En mode `test` ou `live`, ses trois variables sont obligatoires et le webhook Stripe doit cibler `/api/webhooks/stripe`. Resend, Urssaf, Sentry et Turnstile seront activés dans leurs étapes fonctionnelles respectives. Le mode production refuse les configurations incomplètes ou les clés Stripe de test.
 
 Avec cette configuration minimale, la santé d’une préproduction vérifie le socle et l’authentification. En production, `/api/health` exige en plus toutes les intégrations réelles avant de répondre `200`.
 
@@ -94,5 +98,6 @@ Le workflow `.github/workflows/ci.yml` vérifie automatiquement chaque pull requ
 - Le contenu financier et les événements d’audit sont protégés par des contraintes SQLite.
 - Le navigateur ne décide jamais du prix enregistré : le serveur recalcule chaque devis avec la version active du barème et en conserve l’empreinte.
 - Le navigateur ne décide pas non plus qu’un créneau est libre : le serveur le recalcule avant l’écriture et l’unicité est garantie par la base.
+- Le navigateur ne confirme jamais lui-même un paiement : seule la réception d’un événement Stripe signé rend la commande et le créneau définitifs.
 
-Consultez aussi `docs/11-migration-github-vercel.md` pour la checklist de bascule, `docs/12-devis-persistants.md` pour les devis, `docs/13-zones-intervention.md` pour le périmètre commercial et `docs/14-disponibilites-et-verrous.md` pour le planning réel.
+Consultez aussi `docs/11-migration-github-vercel.md` pour la checklist de bascule, `docs/12-devis-persistants.md` pour les devis, `docs/13-zones-intervention.md` pour le périmètre commercial, `docs/14-disponibilites-et-verrous.md` pour le planning réel et `docs/15-commandes-et-garantie-stripe.md` pour le paiement.

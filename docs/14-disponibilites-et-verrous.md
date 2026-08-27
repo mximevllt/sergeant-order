@@ -85,6 +85,8 @@ Le parcours automatisé vérifie notamment :
 - la protection des API par le cookie signé du devis ;
 - l’affichage du verrou réel sur la page de confirmation.
 
-## Limite de cette étape
+## Limite à l’issue de l’étape 13
 
 Un verrou n’est pas encore une commande. Il n’y a toujours ni débit bancaire, ni mandat d’avance immédiate, ni conversion du verrou `HOLD` en réservation `ORDER`. Cette conversion atomique avec le paiement et la création de la commande relève de l’étape 14.
+
+Cette limite est désormais levée pour le parcours par carte par l’étape 14, documentée dans `15-commandes-et-garantie-stripe.md`. Le parcours Avance immédiate reste distinct.

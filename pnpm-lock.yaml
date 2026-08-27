@@ -11,6 +11,12 @@ importers:
       '@libsql/client':
         specifier: 0.17.0
         version: 0.17.0
+      '@stripe/react-stripe-js':
+        specifier: 6.8.2
+        version: 6.8.2(@stripe/stripe-js@9.14.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      '@stripe/stripe-js':
+        specifier: 9.14.0
+        version: 9.14.0
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@libsql/client@0.17.0)
@@ -23,6 +29,9 @@ importers:
       react-dom:
         specifier: 19.2.6
         version: 19.2.6(react@19.2.6)
+      stripe:
+        specifier: 22.5.0
+        version: 22.5.0(@types/node@22.19.19)
     devDependencies:
       '@eslint/js':
         specifier: 9.39.4
@@ -957,6 +966,17 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
+
+  '@stripe/react-stripe-js@6.8.2':
+    resolution: {integrity: sha512-6qxosv6c+LqtdML2R7nCDpFNowuh4ohIM894V9eRkbFJANUKbMKoXBd8AKOQAn1wjEfuYVI2NYtFnqFLOKbPjw==}
+    peerDependencies:
+      '@stripe/stripe-js': '>=9.5.0 <10.0.0'
+      react: '>=16.8.0 <20.0.0'
+      react-dom: '>=16.8.0 <20.0.0'
+
+  '@stripe/stripe-js@9.14.0':
+    resolution: {integrity: sha512-eCeVT2ee5YWyzz+m/cGwuatcPobe0MxzUGJtat8vUuZo4vNg1bzhoImKaTG2uB1ytIO03MrYAP4d6PTiGl+IZQ==}
+    engines: {node: '>=12.16'}
 
   '@swc/helpers@0.5.15':
     resolution: {integrity: sha512-JQ5TuMi45Owi4/BIMAJBoSQoOJu12oOk/gADqlcUL9JEdHB8vyjUSsxqeNXnmXHjYKMi2WcYtezGEEhqUI/E2g==}
@@ -2323,6 +2343,15 @@ packages:
     resolution: {integrity: sha512-6fPc+R4ihwqP6N/aIv2f1gMH8lOVtWQHoqC4yK6oSDVVocumAsfCqjkXnqiYMhmMwS/mEHLp7Vehlt3ql6lEig==}
     engines: {node: '>=8'}
 
+  stripe@22.5.0:
+    resolution: {integrity: sha512-QVwMwriC0bbySx6R4dpsvJ0W//GojC1kwWVS6rPSoVqDUIZX4Hy3TaUrd2AZeXEAaKbfWIjQjvo3vKAReHZ0vQ==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@types/node': '>=18'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+
   styled-jsx@5.1.6:
     resolution: {integrity: sha512-qSVyDTeMotdvQYoHWLNGwRFJHC+i+ZvdBRYosOFgC+Wg1vx4frN2/RG/NA7SYqqvKNLf39P2LSRA2pu6n0XYZA==}
     engines: {node: '>= 12.0.0'}
@@ -3113,6 +3142,15 @@ snapshots:
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
+
+  '@stripe/react-stripe-js@6.8.2(@stripe/stripe-js@9.14.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)':
+    dependencies:
+      '@stripe/stripe-js': 9.14.0
+      prop-types: 15.8.1
+      react: 19.2.6
+      react-dom: 19.2.6(react@19.2.6)
+
+  '@stripe/stripe-js@9.14.0': {}
 
   '@swc/helpers@0.5.15':
     dependencies:
@@ -4685,6 +4723,10 @@ snapshots:
       es-object-atoms: 1.1.2
 
   strip-json-comments@3.1.1: {}
+
+  stripe@22.5.0(@types/node@22.19.19):
+    optionalDependencies:
+      '@types/node': 22.19.19
 
   styled-jsx@5.1.6(@babel/core@7.29.7(supports-color@7.2.0))(react@19.2.6):
     dependencies:

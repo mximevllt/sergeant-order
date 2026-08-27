@@ -120,6 +120,16 @@ test("un devis ne peut porter qu’un seul verrou de planning actif", async () =
   database.close();
 });
 
+test("un paiement Stripe conserve uniquement les références techniques du moyen de paiement", async () => {
+  const database = applyMigrations(await loadMigrations());
+  const columns = database.prepare("PRAGMA table_info(payments)").all();
+  const indexes = database.prepare("PRAGMA index_list(payments)").all();
+  assert.ok(columns.some(({ name }) => name === "provider_payment_method_reference"));
+  assert.ok(indexes.some(({ name }) => name === "idx_payments_provider_payment_method"));
+  assert.equal(columns.some(({ name }) => /card_number|cvc|pan/u.test(String(name))), false);
+  database.close();
+});
+
 test("les événements d'audit sont réellement append-only", async () => {
   const database = applyMigrations(await loadMigrations());
   database.exec(`

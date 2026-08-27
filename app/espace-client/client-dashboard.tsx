@@ -5,6 +5,7 @@ import Link from "@/app/site-link";
 import { useState, type FormEvent } from "react";
 import type { CustomerProfile, Garden, TerrainSlope } from "@/modules/customer/service";
 import type { QuoteView } from "@/modules/quotes/service";
+import type { CustomerOrderView } from "@/modules/orders/service";
 
 const views = ["Accueil", "Mes devis", "Mes interventions", "Mes jardins", "Factures & fiscalité", "Mon profil"] as const;
 type View = typeof views[number];
@@ -12,7 +13,7 @@ type RequestState = { kind: "idle" | "saving" | "success" | "error"; message?: s
 
 const emptyGarden = (): Garden => ({ id: "", label: "", addressLabel: null, line1: "", line2: null, postalCode: "", city: "", surfaceM2: null, terrainSlope: "UNKNOWN", accessWidthCm: null, hasAnimals: false, parkingNotes: null, publicNotes: null });
 
-export function ClientDashboard({ initialProfile, initialGardens, initialQuotes }: { initialProfile: CustomerProfile; initialGardens: Garden[]; initialQuotes: QuoteView[] }) {
+export function ClientDashboard({ initialProfile, initialGardens, initialQuotes, initialOrders }: { initialProfile: CustomerProfile; initialGardens: Garden[]; initialQuotes: QuoteView[]; initialOrders: CustomerOrderView[] }) {
   const [view, setView] = useState<View>("Accueil");
   const [profile, setProfile] = useState(initialProfile);
   const [gardens, setGardens] = useState(initialGardens);
@@ -20,17 +21,23 @@ export function ClientDashboard({ initialProfile, initialGardens, initialQuotes 
   const firstName = profile.fullName.split(/\s+/u)[0] || "Bonjour";
   const initials = profile.fullName.split(/\s+/u).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "SP";
   return <main className="client-app"><aside className="client-nav"><Link href="/" aria-label="Sergeant Paysage, accueil"><Image src="/logo-sergeant-paysage-blanc.png" alt="Sergeant Paysage" width={1784} height={387} priority /></Link><nav aria-label="Espace client">{views.map((item) => <button type="button" key={item} className={view === item ? "active" : ""} onClick={() => setView(item)}>{item}</button>)}</nav><form action="/api/auth/sign-out" method="post"><button type="submit">Se déconnecter</button></form><Link href="/">← Retour au site</Link></aside><section className="client-content"><header><div><p>Espace client sécurisé</p><h1>Bonjour {firstName},</h1></div><span aria-label={`Compte de ${profile.fullName}`}>{initials}</span></header>
-    {view === "Accueil" && <AccountHome email={profile.email} gardenCount={gardens.length} quoteCount={quotes.filter(({ status }) => status === "PRICED" || status === "DRAFT" || status === "SLOT_HELD").length} openGardens={() => setView("Mes jardins")} openQuotes={() => setView("Mes devis")} />}
+    {view === "Accueil" && <AccountHome email={profile.email} gardenCount={gardens.length} quoteCount={quotes.filter(({ status }) => status === "PRICED" || status === "DRAFT" || status === "SLOT_HELD").length} orderCount={initialOrders.length} openGardens={() => setView("Mes jardins")} openQuotes={() => setView("Mes devis")} openOrders={() => setView("Mes interventions")} />}
     {view === "Mes devis" && <Quotes quotes={quotes} onChange={setQuotes} />}
-    {view === "Mes interventions" && <EmptySection title="Mes interventions" text="Vos prochaines interventions et leur suivi apparaîtront ici dès votre première réservation." action="Réserver une intervention" href="/reserver" />}
+    {view === "Mes interventions" && <Orders orders={initialOrders} />}
     {view === "Mes jardins" && <Gardens gardens={gardens} onChange={setGardens} />}
     {view === "Factures & fiscalité" && <EmptySection title="Factures & fiscalité" text="Vos factures, avoirs et attestations fiscales seront disponibles dans cet espace." />}
     {view === "Mon profil" && <Profile profile={profile} onChange={setProfile} />}
   </section></main>;
 }
 
-function AccountHome({ email, gardenCount, quoteCount, openGardens, openQuotes }: { email: string; gardenCount: number; quoteCount: number; openGardens: () => void; openQuotes: () => void }) {
-  return <><article className="account-ready-card"><div><span>Compte opérationnel</span><h2>Votre email est vérifié.</h2><p>{email}</p></div><i aria-hidden="true">✓</i></article><div className="account-start-grid"><article><span>Mes devis</span><h3>{quoteCount ? `${quoteCount} devis à reprendre` : "Planifier une intervention"}</h3><p>Vos devis sont conservés avec le tarif et toutes les réponses du configurateur.</p>{quoteCount ? <button type="button" className="text-action" onClick={openQuotes}>Voir mes devis →</button> : <Link href="/reserver">Commencer un devis →</Link>}</article><article><span>Mes adresses</span><h3>{gardenCount ? `${gardenCount} jardin${gardenCount > 1 ? "s" : ""} enregistré${gardenCount > 1 ? "s" : ""}` : "Ajoutez votre jardin"}</h3><p>Préparez l’adresse et les consignes utiles avant votre réservation.</p><button type="button" className="text-action" onClick={openGardens}>{gardenCount ? "Gérer mes jardins" : "Ajouter un jardin"} →</button></article></div></>;
+function AccountHome({ email, gardenCount, quoteCount, orderCount, openGardens, openQuotes, openOrders }: { email: string; gardenCount: number; quoteCount: number; orderCount: number; openGardens: () => void; openQuotes: () => void; openOrders: () => void }) {
+  return <><article className="account-ready-card"><div><span>Compte opérationnel</span><h2>Votre email est vérifié.</h2><p>{email}</p></div><i aria-hidden="true">✓</i></article><div className="account-start-grid">{orderCount > 0 && <article><span>Mes interventions</span><h3>{orderCount} commande{orderCount > 1 ? "s" : ""}</h3><p>Retrouvez le créneau garanti et le statut de chaque intervention.</p><button type="button" className="text-action" onClick={openOrders}>Voir mes interventions →</button></article>}<article><span>Mes devis</span><h3>{quoteCount ? `${quoteCount} devis à reprendre` : "Planifier une intervention"}</h3><p>Vos devis sont conservés avec le tarif et toutes les réponses du configurateur.</p>{quoteCount ? <button type="button" className="text-action" onClick={openQuotes}>Voir mes devis →</button> : <Link href="/reserver">Commencer un devis →</Link>}</article><article><span>Mes adresses</span><h3>{gardenCount ? `${gardenCount} jardin${gardenCount > 1 ? "s" : ""} enregistré${gardenCount > 1 ? "s" : ""}` : "Ajoutez votre jardin"}</h3><p>Préparez l’adresse et les consignes utiles avant votre réservation.</p><button type="button" className="text-action" onClick={openGardens}>{gardenCount ? "Gérer mes jardins" : "Ajouter un jardin"} →</button></article></div></>;
+}
+
+function Orders({ orders }: { orders: CustomerOrderView[] }) {
+  if (!orders.length) return <EmptySection title="Mes interventions" text="Vos prochaines interventions et leur suivi apparaîtront ici dès votre première réservation." action="Réserver une intervention" href="/reserver" />;
+  const labels: Record<string, string> = { PENDING_PAYMENT_SETUP: "Garantie en cours", SCHEDULED: "Planifiée", PAYMENT_FAILED: "À reprogrammer", CANCELLED: "Annulée", COMPLETED: "Terminée" };
+  return <><div className="dashboard-heading"><div><h2 className="dashboard-title">Mes interventions</h2><p>Commandes garanties et créneaux transmis au planning de SERGEANT PAYSAGE.</p></div><Link className="button button-primary" href="/reserver">Nouvelle intervention <span>＋</span></Link></div><div className="quote-grid">{orders.map((order) => <article className="quote-card" key={order.id}><header><div><span>{labels[order.status] ?? order.status}</span><h3>{order.publicReference}</h3></div><strong>{new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(order.totalTtcCents / 100)}</strong></header><p>{order.tasks.join(" · ")}</p><small>{order.startsAt ? new Intl.DateTimeFormat("fr-FR", { dateStyle: "full", timeStyle: "short", timeZone: "Europe/Paris" }).format(new Date(order.startsAt)) : "Créneau en cours de confirmation"}</small><footer>{order.status === "PENDING_PAYMENT_SETUP" && <Link href={`/paiement/retour?commande=${encodeURIComponent(order.id)}`}>Suivre la confirmation →</Link>}{order.status === "PAYMENT_FAILED" && <Link href={`/reserver?devis=${encodeURIComponent(order.quoteId)}`}>Reprogrammer →</Link>}</footer></article>)}</div></>;
 }
 
 function Quotes({ quotes, onChange }: { quotes: QuoteView[]; onChange: (quotes: QuoteView[]) => void }) {

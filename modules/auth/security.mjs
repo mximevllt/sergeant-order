@@ -64,7 +64,7 @@ export function safePortalReturnTo(value, audience = "CUSTOMER") {
       ? returnTo
       : fallback;
   }
-  return pathname === "/espace-client" || pathname.startsWith("/espace-client/")
+  return pathname === "/espace-client" || pathname.startsWith("/espace-client/") || pathname === "/paiement" || pathname.startsWith("/paiement/")
     ? returnTo
     : fallback;
 }

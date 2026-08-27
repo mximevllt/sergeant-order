@@ -324,7 +324,27 @@ async function accessibleRow(database: AppDatabase, quoteId: string, actor: Auth
       WHERE quote_id = ? AND kind = 'HOLD' AND status = 'ACTIVE' AND expires_at > ? LIMIT 1
     `).bind(row.id, new Date().toISOString()).first<{ id: string }>();
     if (!activeHold) {
+      const expiredAt = new Date().toISOString();
       await database.batch([
+        database.prepare(`
+          INSERT INTO order_status_history (id, order_id, from_status, to_status, reason, metadata_json)
+          SELECT lower(hex(randomblob(16))), o.id, o.status, 'PAYMENT_FAILED', 'HOLD_EXPIRED', json_object('expiredAt', ?)
+          FROM orders o JOIN schedule_reservations r ON r.order_id = o.id
+          WHERE r.quote_id = ? AND r.kind = 'HOLD' AND r.status = 'ACTIVE' AND o.status = 'PENDING_PAYMENT_SETUP'
+        `).bind(expiredAt, row.id),
+        database.prepare(`
+          UPDATE payments SET status = 'CANCELLED', failure_code = 'HOLD_EXPIRED',
+            failure_message_safe = 'Le délai de réservation du créneau a expiré.', updated_at = CURRENT_TIMESTAMP
+          WHERE status IN ('CREATED', 'PENDING', 'REQUIRES_ACTION') AND order_id IN (
+            SELECT order_id FROM schedule_reservations WHERE quote_id = ? AND kind = 'HOLD' AND status = 'ACTIVE' AND order_id IS NOT NULL
+          )
+        `).bind(row.id),
+        database.prepare(`
+          UPDATE orders SET status = 'PAYMENT_FAILED', updated_at = CURRENT_TIMESTAMP
+          WHERE status = 'PENDING_PAYMENT_SETUP' AND id IN (
+            SELECT order_id FROM schedule_reservations WHERE quote_id = ? AND kind = 'HOLD' AND status = 'ACTIVE' AND order_id IS NOT NULL
+          )
+        `).bind(row.id),
         database.prepare(`
           UPDATE schedule_reservation_slots SET status = 'RELEASED'
           WHERE status = 'ACTIVE' AND reservation_id IN (

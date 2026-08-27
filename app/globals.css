@@ -533,6 +533,36 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .confirmation-page section > aside strong { font-family: var(--display); font-size: 19px; }
 .confirmation-page section > aside p { margin-top: 5px; color: rgba(246,244,235,.6); font-size: 10px; }
 
+/* Paiement sécurisé */
+.payment-page { min-height: 100vh; background: #eeede5; }
+.payment-page > header { height: 72px; padding: 0 5vw; display: flex; align-items: center; justify-content: space-between; color: rgba(246,244,235,.7); background: var(--ink); font-size: 9px; letter-spacing: .2em; text-transform: uppercase; }
+.payment-page > header img { width: 205px; height: auto; }
+.payment-layout { display: grid; grid-template-columns: minmax(0,.9fr) minmax(420px,1.1fr); max-width: 1120px; margin: 0 auto; padding: 70px 35px 100px; gap: 65px; }
+.payment-summary h1 { max-width: 500px; margin: 10px 0 18px; font-size: clamp(48px,5vw,72px); line-height: .96; }
+.payment-summary > p:not(.kicker) { max-width: 540px; color: var(--sage); line-height: 1.65; }
+.payment-summary dl { margin: 35px 0 28px; border-top: 1px solid var(--line); }
+.payment-summary dl div { display: grid; grid-template-columns: 135px 1fr; gap: 18px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.payment-summary dt { color: var(--bronze); font-size: 8px; letter-spacing: .16em; text-transform: uppercase; }
+.payment-summary dd { margin: 0; font-family: var(--display); font-size: 17px; line-height: 1.35; }
+.payment-summary > a { color: var(--sage); font-size: 11px; }
+.payment-panel { align-self: start; padding: 38px; background: var(--paper); border: 1px solid rgba(33,46,35,.12); box-shadow: 0 22px 60px rgba(33,46,35,.08); }
+.payment-panel > p { color: var(--bronze); font-size: 9px; letter-spacing: .15em; text-transform: uppercase; }
+.payment-panel > h2 { margin: 7px 0 26px; font-size: 31px; }
+.payment-security { display: flex; gap: 14px; margin-bottom: 24px; padding: 16px; background: rgba(99,120,92,.08); }
+.payment-security i { display: grid; width: 34px; height: 34px; place-items: center; flex: 0 0 auto; color: var(--paper); background: var(--sage); border-radius: 50%; font-style: normal; }
+.payment-security strong, .payment-security p { display: block; }
+.payment-security strong { font-family: var(--display); font-size: 17px; }
+.payment-security p { margin-top: 3px; color: var(--sage); font-size: 10px; line-height: 1.45; }
+.payment-consent > label { display: flex; align-items: flex-start; gap: 11px; color: #4f5d51; font-size: 10px; line-height: 1.6; }
+.payment-consent > label input { margin-top: 3px; accent-color: var(--ink); }
+.payment-consent > button, .stripe-form > button { width: 100%; margin-top: 22px; justify-content: center; border: 0; }
+.payment-consent > small, .stripe-form > small { display: block; margin-top: 12px; color: var(--sage); font-size: 9px; line-height: 1.5; text-align: center; }
+.payment-error { margin-top: 14px; padding: 12px; color: #843b35; background: #f8e9e6; font-size: 10px; line-height: 1.5; }
+.payment-trust { display: flex; justify-content: space-between; gap: 10px; margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--sage); font-size: 8px; text-transform: uppercase; }
+.stripe-form { min-height: 250px; }
+.payment-return .confirm-check.failed { background: #91473f; }
+.payment-return > section { max-width: 900px; margin: 0 auto; padding: 70px 35px 100px; text-align: center; }
+
 /* Passwordless authentication */
 .login-page { min-height: 100vh; display: grid; grid-template-columns: minmax(360px,.78fr) minmax(520px,1.22fr); background: #ebeae3; }
 .login-brand-panel { min-height: 100vh; padding: 42px 4vw 58px; display: flex; flex-direction: column; justify-content: space-between; color: var(--paper); background: var(--ink); }
@@ -812,6 +842,9 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
   .project-form { padding: 22px; }
   .project-form fieldset > div, .project-form > label:last-of-type { grid-template-columns: 1fr; }
   .confirm-card { grid-template-columns: 1fr; }
+  .payment-layout { grid-template-columns: 1fr; padding: 45px 20px 70px; gap: 35px; }
+  .payment-panel { padding: 25px 20px; }
+  .payment-trust { flex-direction: column; }
   .timeline span { font-size: 7px; }
   .client-nav nav { display: none; }
   .repeat-grid, .garden-grid, .quote-grid { grid-template-columns: 1fr; }

@@ -135,6 +135,28 @@ function placeholders(values: unknown[]): string {
 async function cleanupExpiredHolds(database: AppDatabase, nowIso = new Date().toISOString()): Promise<void> {
   await database.batch([
     database.prepare(`
+      INSERT INTO order_status_history (id, order_id, from_status, to_status, reason, metadata_json)
+      SELECT lower(hex(randomblob(16))), o.id, o.status, 'PAYMENT_FAILED', 'HOLD_EXPIRED', json_object('expiredAt', ?)
+      FROM orders o JOIN schedule_reservations r ON r.order_id = o.id
+      WHERE r.kind = 'HOLD' AND r.status = 'ACTIVE' AND r.expires_at IS NOT NULL AND r.expires_at <= ?
+        AND o.status = 'PENDING_PAYMENT_SETUP'
+    `).bind(nowIso, nowIso),
+    database.prepare(`
+      UPDATE payments SET status = 'CANCELLED', failure_code = 'HOLD_EXPIRED',
+        failure_message_safe = 'Le délai de réservation du créneau a expiré.', updated_at = CURRENT_TIMESTAMP
+      WHERE status IN ('CREATED', 'PENDING', 'REQUIRES_ACTION') AND order_id IN (
+        SELECT order_id FROM schedule_reservations
+        WHERE kind = 'HOLD' AND status = 'ACTIVE' AND expires_at IS NOT NULL AND expires_at <= ? AND order_id IS NOT NULL
+      )
+    `).bind(nowIso),
+    database.prepare(`
+      UPDATE orders SET status = 'PAYMENT_FAILED', updated_at = CURRENT_TIMESTAMP
+      WHERE status = 'PENDING_PAYMENT_SETUP' AND id IN (
+        SELECT order_id FROM schedule_reservations
+        WHERE kind = 'HOLD' AND status = 'ACTIVE' AND expires_at IS NOT NULL AND expires_at <= ? AND order_id IS NOT NULL
+      )
+    `).bind(nowIso),
+    database.prepare(`
       UPDATE quotes SET status = 'PRICED', updated_at = CURRENT_TIMESTAMP
       WHERE status = 'SLOT_HELD' AND id IN (
         SELECT quote_id FROM schedule_reservations
