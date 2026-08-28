@@ -2,8 +2,10 @@ import { createClient } from "@libsql/client";
 import { readFile, readdir } from "node:fs/promises";
 
 const migrationsDirectory = new URL("../drizzle/", import.meta.url);
+const databaseUrl = process.env.TURSO_DATABASE_URL || "file:./sergeant-paysage.local.db";
+const isRemoteLibsql = /^libsqls?:\/\//iu.test(databaseUrl);
 const client = createClient({
-  url: process.env.TURSO_DATABASE_URL || "file:./sergeant-paysage.local.db",
+  url: databaseUrl,
   authToken: process.env.TURSO_AUTH_TOKEN || undefined,
 });
 
@@ -28,6 +30,9 @@ try {
       .split("--> statement-breakpoint")
       .map((statement) => statement.trim())
       .filter(Boolean)
+      // Turso n'autorise pas PRAGMA optimize dans un lot HTTP ; il n'est pas
+      // nécessaire à la structure et reste exécuté pour les bases locales.
+      .filter((statement) => !(isRemoteLibsql && /^PRAGMA\s+optimize\s*;?$/iu.test(statement)))
       .map((statement) => ({ sql: statement, args: [] }));
     statements.push({
       sql: "INSERT INTO app_migrations (name) VALUES (?)",

@@ -230,7 +230,7 @@ test("le jeu de démonstration est idempotent et clairement isolé", async () =>
   database.exec(demoSql);
   database.exec(demoSql);
 
-  assert.equal(database.prepare("SELECT count(*) AS count FROM users WHERE id LIKE 'demo-%'").get().count, 2);
+  assert.equal(database.prepare("SELECT count(*) AS count FROM users WHERE id LIKE 'demo-%'").get().count, 4);
   assert.equal(database.prepare("SELECT count(*) AS count FROM orders WHERE id LIKE 'demo-%'").get().count, 1);
   assert.equal(database.prepare("SELECT count(*) AS count FROM interventions WHERE id LIKE 'demo-%'").get().count, 1);
   assert.equal(database.prepare("SELECT count(*) AS count FROM schedule_reservation_slots WHERE id LIKE 'demo-%'").get().count, 1);

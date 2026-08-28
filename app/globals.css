@@ -731,6 +731,33 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .admin-empty > span { color: var(--bronze); font-size: 8px; letter-spacing: .2em; text-transform: uppercase; }
 .admin-empty h2 { margin-top: 13px; font-size: 29px; }
 .admin-empty p { max-width: 700px; margin-top: 10px; color: var(--sage); font-size: 12px; line-height: 1.65; }
+.admin-directory > header { margin-bottom: 0; }
+.directory-intro { max-width: 760px; margin: 25px 0 30px; color: var(--sage); font-size: 13px; line-height: 1.7; }
+.directory-list { display: grid; gap: 12px; }
+.directory-list > article, .team-directory > article, .directory-empty { padding: 24px; background: var(--paper); border: 1px solid rgba(33,46,35,.09); }
+.directory-list > article > header, .team-directory > article > header { display: flex; align-items: start; justify-content: space-between; gap: 18px; }
+.directory-list > article header span, .team-directory > article header span { color: var(--bronze); font-size: 8px; letter-spacing: .16em; text-transform: uppercase; }
+.directory-list > article h2, .team-directory > article h2 { margin-top: 7px; font-size: 29px; }
+.directory-list > article header > time, .directory-list > article header > p, .team-directory > article header > p { margin: 0; color: var(--sage); font-size: 10px; line-height: 1.55; text-align: right; }
+.directory-details { margin-top: 21px; display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 9px; }
+.directory-details > p { min-height: 64px; margin: 0; padding: 13px; display: grid; align-content: start; gap: 6px; color: var(--ink); background: var(--mist); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
+.directory-details b { color: var(--bronze); font-size: 8px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; }
+.directory-details small { color: var(--sage); font-size: 9px; }
+.directory-details .detail-wide { grid-column: span 2; }
+.directory-empty { margin-top: 30px; border-left: 4px solid var(--bronze); }
+.directory-empty span { color: var(--bronze); font-size: 25px; }
+.directory-empty h2 { margin-top: 8px; font-size: 32px; }
+.directory-empty p { margin-top: 9px; color: var(--sage); font-size: 12px; line-height: 1.6; }
+.team-directory { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.team-directory > article { border-top: 4px solid var(--bronze); }
+.team-directory section { margin-top: 24px; padding-top: 17px; border-top: 1px solid var(--line); }
+.team-directory h3, .team-directory footer b { color: var(--bronze); font-size: 8px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; }
+.team-directory ul { margin-top: 12px; display: grid; gap: 8px; }
+.team-directory li { padding: 11px 0; display: flex; justify-content: space-between; gap: 15px; border-bottom: 1px solid var(--line); }
+.team-directory li strong { font-size: 13px; }
+.team-directory li small, .team-directory section > p { color: var(--sage); font-size: 10px; }
+.team-directory footer { margin-top: 22px; padding: 14px; background: var(--mist); }
+.team-directory footer p { margin-top: 8px; color: var(--ink); font-size: 10px; line-height: 1.55; overflow-wrap: anywhere; }
 
 .access-denied { min-height: 100vh; padding: 8vw; display: grid; place-items: center; background: #ebeae3; }
 .access-denied section { width: min(720px,100%); padding: clamp(36px,6vw,75px); background: var(--paper); border-top: 4px solid var(--bronze); box-shadow: 0 30px 80px rgba(33,46,35,.12); }
@@ -881,6 +908,8 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
   .admin-app > aside { min-height: auto; padding: 18px; flex-direction: row; align-items: center; gap: 18px; overflow-x: auto; }
   .admin-app > aside > a img { width: 145px; }
   .admin-app > aside nav { margin: 0 0 0 auto; display: flex; white-space: nowrap; }
+  .directory-details { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .team-directory { grid-template-columns: 1fr; }
   .admin-identity { margin: 0; padding: 0 0 0 18px; border-top: 0; border-left: 1px solid rgba(246,244,235,.14); white-space: nowrap; }
   .admin-identity strong, .admin-identity small { display: none; }
   .admin-identity button { margin-top: 0; }
@@ -956,6 +985,8 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
   .booking-actions { display: none; }
   .report-review-list section { grid-template-columns: 1fr; }
   .report-review-list footer { align-items: flex-start; flex-direction: column; }
+  .directory-details { grid-template-columns: 1fr; }
+  .directory-details .detail-wide { grid-column: auto; }
 }
 
 @media (max-width: 600px) {

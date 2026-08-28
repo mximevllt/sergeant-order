@@ -4,11 +4,22 @@ INSERT OR IGNORE INTO users
   (id, email, email_normalized, email_verified_at, full_name, phone, status)
 VALUES
   ('demo-customer', 'client.demo@sergeant-paysage.invalid', 'client.demo@sergeant-paysage.invalid', CURRENT_TIMESTAMP, '[DÉMO] Camille Jardin', '0600000000', 'ACTIVE'),
-  ('demo-dispatcher', 'planning.demo@sergeant-paysage.invalid', 'planning.demo@sergeant-paysage.invalid', CURRENT_TIMESTAMP, '[DÉMO] Responsable planning', '0600000001', 'ACTIVE');
+  ('demo-dispatcher', 'planning.demo@sergeant-paysage.invalid', 'planning.demo@sergeant-paysage.invalid', CURRENT_TIMESTAMP, '[DÉMO] Responsable planning', '0600000001', 'ACTIVE'),
+  ('demo-christophe', 'christophe.demo@sergeant-paysage.invalid', 'christophe.demo@sergeant-paysage.invalid', CURRENT_TIMESTAMP, 'Christophe', NULL, 'ACTIVE'),
+  ('demo-aline', 'aline.demo@sergeant-paysage.invalid', 'aline.demo@sergeant-paysage.invalid', CURRENT_TIMESTAMP, '[DÉMO] Aline Martin', NULL, 'ACTIVE');
 
 INSERT OR IGNORE INTO user_roles (user_id, role, granted_by_user_id) VALUES
   ('demo-customer', 'CUSTOMER', NULL),
-  ('demo-dispatcher', 'DISPATCHER', NULL);
+  ('demo-dispatcher', 'DISPATCHER', NULL),
+  ('demo-christophe', 'FIELD_STAFF', 'demo-dispatcher'),
+  ('demo-aline', 'FIELD_STAFF', 'demo-dispatcher');
+
+UPDATE teams SET name = 'Équipe Christophe', updated_at = CURRENT_TIMESTAMP WHERE id = 'team-1';
+UPDATE teams SET name = 'Équipe 2 — démonstration', updated_at = CURRENT_TIMESTAMP WHERE id = 'team-2';
+
+INSERT OR IGNORE INTO team_members (team_id, user_id, role) VALUES
+  ('team-1', 'demo-christophe', 'LEAD'),
+  ('team-2', 'demo-aline', 'LEAD');
 
 INSERT OR IGNORE INTO customer_profiles
   (user_id, customer_type, terms_accepted_at, privacy_accepted_at)
