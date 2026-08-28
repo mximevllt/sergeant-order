@@ -20,7 +20,7 @@ const NAVIGATION: Array<{ label: string; permission: Permission }> = [
   { label: "Réglages", permission: "settings.read" },
 ];
 
-const navigationHref: Record<string, string> = { Planning: "/admin/planning" };
+const navigationHref: Record<string, string> = { Planning: "/admin/planning", Interventions: "/admin/reports" };
 
 const ROLE_LABELS: Record<string, string> = {
   DISPATCHER: "Responsable planning",

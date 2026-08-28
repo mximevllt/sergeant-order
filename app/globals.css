@@ -784,6 +784,31 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .field-secondary { color: var(--ink); background: transparent; }
 .field-mission button:disabled { cursor: wait; opacity: .48; }
 .field-finished { margin-top: 24px; color: var(--bronze); font-size: 11px; line-height: 1.5; }
+.field-report { margin-top: 25px; padding: 19px; background: var(--mist); }
+.field-report > header span, .field-report label { color: var(--sage); font-size: 9px; }
+.field-report > header span { letter-spacing: .15em; text-transform: uppercase; }
+.field-report > header h3 { margin-top: 5px; font-size: 22px; }
+.field-report label { margin-top: 16px; display: grid; gap: 7px; }
+.field-report textarea { min-height: 74px; padding: 10px; resize: vertical; color: var(--ink); background: var(--paper); border: 1px solid rgba(33,46,35,.2); border-radius: 5px; font: inherit; font-size: 12px; line-height: 1.5; }
+.field-report .field-incident { display: flex; align-items: center; gap: 8px; color: var(--ink); font-size: 11px; }
+.report-review-intro { max-width: 720px; margin: 24px 0 30px; color: var(--sage); font-size: 13px; line-height: 1.7; }
+.report-review-list { display: grid; gap: 15px; }
+.report-review-list > article { padding: 27px; background: var(--paper); border-left: 4px solid var(--bronze); }
+.report-review-list > article > header { display: flex; align-items: start; justify-content: space-between; gap: 20px; }
+.report-review-list > article header span { color: var(--bronze); font-size: 8px; letter-spacing: .15em; text-transform: uppercase; }
+.report-review-list > article h2 { margin-top: 7px; font-size: 28px; }
+.report-review-list > article header small { color: var(--sage); font-size: 10px; text-align: right; }
+.report-review-list section { margin-top: 22px; display: grid; grid-template-columns: repeat(2,1fr); gap: 10px; }
+.report-review-list section > div { padding: 15px; background: var(--mist); }
+.report-review-list section span { color: var(--bronze); font-size: 8px; letter-spacing: .12em; text-transform: uppercase; }
+.report-review-list section p { margin-top: 7px; color: var(--ink); font-size: 12px; line-height: 1.55; white-space: pre-wrap; }
+.report-review-list section .report-incident { grid-column: 1/-1; background: #f0ddcf; }
+.report-review-list footer { margin-top: 17px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.report-review-list footer p { color: var(--sage); font-size: 10px; line-height: 1.5; }
+.report-review-list footer .button { min-width: 195px; }
+.customer-report-summary { margin-top: 15px; padding: 13px 14px; background: var(--mist); border-left: 2px solid var(--bronze); }
+.customer-report-summary > span { color: var(--bronze); font-size: 8px; letter-spacing: .13em; text-transform: uppercase; }
+.customer-report-summary p { margin-top: 7px; color: var(--ink); font-size: 12px; line-height: 1.55; white-space: pre-wrap; }
 .admin-stats { margin-top: 35px; display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
 .admin-stats article { padding: 22px; background: var(--paper); border: 1px solid rgba(33,46,35,.08); }
 .admin-stats span, .admin-stats strong, .admin-stats small { display: block; }
@@ -929,6 +954,8 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
   .mobile-price-bar button, .mobile-price-bar a { min-height: 50px; padding: 0 24px; display: grid; place-items: center; color: var(--paper); background: var(--ink); border: 0; border-radius: 10px; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
   .mobile-price-bar .mobile-back { width: 42px; min-height: 42px; padding: 0; color: var(--ink); background: transparent; border: 1px solid rgba(33,46,35,.18); border-radius: 50%; font-size: 18px; }
   .booking-actions { display: none; }
+  .report-review-list section { grid-template-columns: 1fr; }
+  .report-review-list footer { align-items: flex-start; flex-direction: column; }
 }
 
 @media (max-width: 600px) {

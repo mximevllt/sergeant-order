@@ -23,6 +23,7 @@ export type CustomerOrderView = {
   startsAt: string | null;
   endsAt: string | null;
   tasks: string[];
+  reports: Array<{ customerSummary: string; closedAt: string }>;
 };
 export type PaymentSetup = { order: CustomerOrderView; clientSecret: string; publishableKey: string; holdExpiresAt: string };
 
@@ -104,12 +105,23 @@ async function viewOrder(database: AppDatabase, orderId: string, userId: string)
     WHERE o.id = ? AND o.customer_user_id = ? GROUP BY o.id LIMIT 1
   `).bind(orderId, userId).first<Record<string, unknown>>();
   if (!row) throw new OrderNotFoundError("ORDER_NOT_FOUND");
-  const tasks = await database.prepare(`SELECT label_snapshot AS label FROM order_tasks WHERE order_id = ? ORDER BY priority, label_snapshot`).bind(orderId).all<{ label: string }>();
+  const [tasks, reports] = await Promise.all([
+    database.prepare(`SELECT label_snapshot AS label FROM order_tasks WHERE order_id = ? ORDER BY priority, label_snapshot`).bind(orderId).all<{ label: string }>(),
+    database.prepare(`
+      SELECT r.customer_summary AS customerSummary, r.closed_at AS closedAt
+      FROM intervention_reports r
+      JOIN interventions i ON i.id = r.intervention_id
+      WHERE i.order_id = ? AND r.status = 'CLOSED' AND r.customer_summary IS NOT NULL
+      ORDER BY i.sequence ASC
+    `).bind(orderId).all<{ customerSummary: string; closedAt: string }>(),
+  ]);
   return {
     id: String(row.id), publicReference: String(row.publicReference), quoteId: String(row.quoteId), quoteReference: String(row.quoteReference),
     status: String(row.status) as OrderStatus, totalTtcCents: Number(row.totalTtcCents), selectedHalfDays: Number(row.selectedHalfDays),
     confirmedAt: row.confirmedAt ? String(row.confirmedAt) : null, startsAt: row.startsAt ? String(row.startsAt) : null,
-    endsAt: row.endsAt ? String(row.endsAt) : null, tasks: tasks.results.map(({ label }) => label),
+    endsAt: row.endsAt ? String(row.endsAt) : null,
+    tasks: tasks.results.map(({ label }) => label),
+    reports: reports.results.map(({ customerSummary, closedAt }) => ({ customerSummary, closedAt })),
   };
 }
 

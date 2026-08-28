@@ -113,6 +113,9 @@ test("Next.js sert les pages publiques et protège les portails", async () => {
   const planning = await request("/admin/planning");
   assert.equal(planning.status, 307);
   assert.match(planning.headers.get("location") ?? "", /\/connexion-entreprise\?returnTo=/u);
+  const reports = await request("/admin/reports");
+  assert.equal(reports.status, 307);
+  assert.match(reports.headers.get("location") ?? "", /\/connexion-entreprise\?returnTo=/u);
   const planningApi = await request("/api/admin/planning", { accept: "application/json" });
   assert.equal(planningApi.status, 401);
   const field = await request("/terrain");
@@ -120,6 +123,14 @@ test("Next.js sert les pages publiques et protège les portails", async () => {
   assert.match(field.headers.get("location") ?? "", /\/connexion-entreprise\?returnTo=/u);
   const fieldApi = await request("/api/field/interventions", { accept: "application/json" });
   assert.equal(fieldApi.status, 401);
+  const fieldReportApi = await request("/api/field/interventions/mission-inconnue/report", {
+    method: "PATCH", headers: { "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json" }, body: JSON.stringify({}), accept: "application/json",
+  });
+  assert.equal(fieldReportApi.status, 401);
+  const reportReviewApi = await request("/api/admin/interventions/mission-inconnue/report/close", {
+    method: "PATCH", headers: { "Sec-Fetch-Site": "same-origin" }, accept: "application/json",
+  });
+  assert.equal(reportReviewApi.status, 401);
   const payment = await request("/paiement?devis=devis-inconnu");
   assert.equal(payment.status, 307);
   assert.match(decodeURIComponent(payment.headers.get("location") ?? ""), /returnTo=\/paiement\?devis=/u);

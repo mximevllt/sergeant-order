@@ -21,13 +21,22 @@ export type FieldMission = {
   address: string;
   teamName: string;
   tasks: Array<{ id: string; label: string; status: InterventionTaskStatus; notes: string | null }>;
+  report: InterventionReport | null;
+};
+export type InterventionReport = {
+  status: "DRAFT" | "READY_FOR_REVIEW" | "CLOSED";
+  customerSummary: string | null;
+  internalSummary: string | null;
+  incidentReported: boolean;
+  incidentDetails: string | null;
+  closedAt: string | null;
 };
 
 export class InterventionNotFoundError extends Error {}
 export class InterventionConflictError extends Error { constructor(public code: string) { super(code); } }
 export class InterventionInputError extends Error { constructor(public fields: Record<string, string>) { super("INTERVENTION_INPUT_INVALID"); } }
 
-type MissionRow = Omit<FieldMission, "tasks">;
+type MissionRow = Omit<FieldMission, "tasks" | "report">;
 type TaskRow = { id: string; label: string; status: InterventionTaskStatus; notes: string | null };
 const FIELD_ACTIONS = ["DEPART", "ARRIVE", "START", "PAUSE", "RESUME", "COMPLETE"] as const;
 type FieldAction = typeof FIELD_ACTIONS[number];
@@ -43,6 +52,14 @@ function cleanNote(value: unknown): string | null {
   if (!note) return null;
   if (note.length > 1000) throw new InterventionInputError({ note: "La note ne peut pas dépasser 1 000 caractères." });
   return note;
+}
+
+function cleanReportText(value: unknown, field: string, maximum: number): string | null {
+  if (typeof value !== "string") return null;
+  const text = value.normalize("NFKC").trim();
+  if (!text) return null;
+  if (text.length > maximum) throw new InterventionInputError({ [field]: `Ce texte ne peut pas dépasser ${maximum.toLocaleString("fr-FR")} caractères.` });
+  return text;
 }
 
 async function assertMissionAccess(interventionId: string, user: AuthUser): Promise<MissionRow> {
@@ -72,12 +89,20 @@ async function assertMissionAccess(interventionId: string, user: AuthUser): Prom
 
 async function viewMission(interventionId: string, user: AuthUser): Promise<FieldMission> {
   const mission = await assertMissionAccess(interventionId, user);
-  const tasks = await getDatabase().prepare(`
+  const database = getDatabase();
+  const [tasks, report] = await Promise.all([
+    database.prepare(`
     SELECT it.id, ot.label_snapshot AS label, it.status, it.notes
     FROM intervention_tasks it JOIN order_tasks ot ON ot.id = it.order_task_id
     WHERE it.intervention_id = ? ORDER BY ot.priority, ot.label_snapshot
-  `).bind(interventionId).all<TaskRow>();
-  return { ...mission, tasks: tasks.results };
+  `).bind(interventionId).all<TaskRow>(),
+    database.prepare(`
+      SELECT status, customer_summary AS customerSummary, internal_summary AS internalSummary,
+        incident_reported AS incidentReported, incident_details AS incidentDetails, closed_at AS closedAt
+      FROM intervention_reports WHERE intervention_id = ? LIMIT 1
+    `).bind(interventionId).first<InterventionReport>(),
+  ]);
+  return { ...mission, tasks: tasks.results, report };
 }
 
 export async function listFieldMissions(user: AuthUser): Promise<FieldMission[]> {
@@ -154,5 +179,66 @@ export async function updateFieldTask(interventionId: string, taskId: string, in
     INSERT INTO intervention_events (id, intervention_id, event_type, actor_user_id, internal_note, metadata_json)
     VALUES (?, ?, 'TASK_UPDATED', ?, ?, ?)
   `).bind(crypto.randomUUID(), interventionId, user.id, notes, JSON.stringify({ taskId, status })).run();
+  return viewMission(interventionId, user);
+}
+
+export async function saveFieldReport(interventionId: string, input: unknown, user: AuthUser): Promise<FieldMission> {
+  const mission = await assertMissionAccess(interventionId, user);
+  if (mission.status !== "COMPLETED") throw new InterventionConflictError("REPORT_REQUIRES_COMPLETED_MISSION");
+  const raw = input && typeof input === "object" && !Array.isArray(input) ? input as Record<string, unknown> : {};
+  const customerSummary = cleanReportText(raw.customerSummary, "customerSummary", 2_000);
+  const internalSummary = cleanReportText(raw.internalSummary, "internalSummary", 3_000);
+  const incidentReported = raw.incidentReported === true;
+  const incidentDetails = cleanReportText(raw.incidentDetails, "incidentDetails", 2_000);
+  if (incidentReported && !incidentDetails) throw new InterventionInputError({ incidentDetails: "Décrivez l’incident signalé au responsable." });
+  const submit = raw.submit === true;
+  if (submit && !customerSummary) throw new InterventionInputError({ customerSummary: "Un résumé destiné au client est nécessaire avant envoi au responsable." });
+  const database = getDatabase();
+  const saved = await database.prepare(`
+    INSERT INTO intervention_reports (id, intervention_id, status, customer_summary, internal_summary, incident_reported, incident_details)
+    VALUES (?, ?, 'DRAFT', ?, ?, ?, ?)
+    ON CONFLICT(intervention_id) DO UPDATE SET
+      customer_summary = excluded.customer_summary, internal_summary = excluded.internal_summary,
+      incident_reported = excluded.incident_reported, incident_details = excluded.incident_details,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE intervention_reports.status = 'DRAFT'
+  `).bind(crypto.randomUUID(), interventionId, customerSummary, internalSummary, incidentReported ? 1 : 0, incidentDetails).run();
+  if (Number(saved.meta.changes) !== 1) throw new InterventionConflictError("REPORT_ALREADY_SUBMITTED");
+  const statements = [database.prepare(`
+    INSERT INTO intervention_events (id, intervention_id, event_type, actor_user_id, internal_note, metadata_json)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).bind(crypto.randomUUID(), interventionId, submit ? "REPORT_SUBMITTED" : "REPORT_SAVED", user.id, internalSummary, JSON.stringify({ incidentReported }))];
+  if (submit) {
+    const tasks = await database.prepare(`SELECT status FROM intervention_tasks WHERE intervention_id = ?`).bind(interventionId).all<{ status: InterventionTaskStatus }>();
+    if (tasks.results.some((task) => !["DONE", "NOT_DONE", "BLOCKED"].includes(task.status))) throw new InterventionConflictError("REPORT_TASKS_INCOMPLETE");
+    statements.push(database.prepare(`UPDATE intervention_reports SET status = 'READY_FOR_REVIEW', updated_at = CURRENT_TIMESTAMP WHERE intervention_id = ? AND status = 'DRAFT'`).bind(interventionId));
+  }
+  await database.batch(statements);
+  return viewMission(interventionId, user);
+}
+
+export async function listReportsForReview(user: AuthUser): Promise<FieldMission[]> {
+  const database = getDatabase();
+  const rows = await database.prepare(`
+    SELECT i.id FROM interventions i JOIN intervention_reports r ON r.intervention_id = i.id
+    WHERE r.status = 'READY_FOR_REVIEW' ORDER BY i.completed_at ASC
+  `).all<{ id: string }>();
+  return Promise.all(rows.results.map(({ id }) => viewMission(id, user)));
+}
+
+export async function closeInterventionReport(interventionId: string, user: AuthUser): Promise<FieldMission> {
+  if (!hasPermission(user.roles, "orders.write")) throw new InterventionConflictError("REPORT_REVIEW_DENIED");
+  await assertMissionAccess(interventionId, user);
+  const database = getDatabase();
+  const closed = await database.prepare(`
+    UPDATE intervention_reports SET status = 'CLOSED', closed_by_user_id = ?, closed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+    WHERE intervention_id = ? AND status = 'READY_FOR_REVIEW'
+  `).bind(user.id, interventionId).run();
+  if (Number(closed.meta.changes) !== 1) throw new InterventionConflictError("REPORT_NOT_READY");
+  await database.batch([
+    database.prepare(`UPDATE interventions SET status = 'REPORT_CLOSED', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'COMPLETED'`).bind(interventionId),
+    database.prepare(`INSERT INTO intervention_events (id, intervention_id, event_type, actor_user_id, metadata_json) VALUES (?, ?, 'REPORT_CLOSED', ?, ?)`)
+      .bind(crypto.randomUUID(), interventionId, user.id, JSON.stringify({ review: "approved" })),
+  ]);
   return viewMission(interventionId, user);
 }
