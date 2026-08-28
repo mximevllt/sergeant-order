@@ -316,6 +316,58 @@ export async function searchAvailability(value: unknown, now = new Date()): Prom
   return (await internalAvailability(value, now)).result;
 }
 
+/**
+ * Crée les fiches d'intervention à partir du créneau déjà confirmé. Cette
+ * matérialisation est volontairement idempotente : un webhook Stripe peut être
+ * rejoué sans créer une seconde mission ni une seconde affectation.
+ */
+export function orderInterventionStatements(database: AppDatabase, orderId: string): PreparedStatement[] {
+  return [
+    database.prepare(`
+      INSERT OR IGNORE INTO order_assignments (id, order_id, team_id, assigned_by_user_id, reason, starts_at)
+      SELECT lower(hex(randomblob(16))), o.id, s.team_id,
+        COALESCE((SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('ADMIN', 'DISPATCHER') ORDER BY CASE ur.role WHEN 'ADMIN' THEN 0 ELSE 1 END LIMIT 1), o.customer_user_id),
+        'Affectation créée à la confirmation du créneau.', MIN(s.starts_at)
+      FROM orders o
+      JOIN schedule_reservations r ON r.order_id = o.id AND r.kind = 'ORDER' AND r.status = 'ACTIVE'
+      JOIN schedule_reservation_slots s ON s.reservation_id = r.id AND s.status = 'ACTIVE'
+      WHERE o.id = ? AND NOT EXISTS (
+        SELECT 1 FROM order_assignments existing WHERE existing.order_id = o.id AND existing.ends_at IS NULL
+      )
+      GROUP BY o.id, s.team_id
+    `).bind(orderId),
+    database.prepare(`
+      INSERT OR IGNORE INTO interventions
+        (id, order_id, sequence, team_id, status, planned_starts_at, planned_ends_at, mission_snapshot)
+      SELECT lower(hex(randomblob(16))), o.id,
+        ROW_NUMBER() OVER (ORDER BY substr(s.starts_at, 1, 10)),
+        s.team_id, 'PLANNED', MIN(s.starts_at), MAX(s.ends_at),
+        json_object(
+          'orderReference', o.public_reference,
+          'customerName', u.full_name,
+          'customerPhone', u.phone,
+          'gardenLabel', g.label,
+          'serviceAddress', json(o.service_address_snapshot),
+          'tasks', json((SELECT json_group_array(label_snapshot) FROM order_tasks WHERE order_id = o.id)),
+          'pricing', json(o.pricing_snapshot)
+        )
+      FROM orders o
+      JOIN users u ON u.id = o.customer_user_id
+      JOIN gardens g ON g.id = o.garden_id
+      JOIN schedule_reservations r ON r.order_id = o.id AND r.kind = 'ORDER' AND r.status = 'ACTIVE'
+      JOIN schedule_reservation_slots s ON s.reservation_id = r.id AND s.status = 'ACTIVE'
+      WHERE o.id = ?
+      GROUP BY o.id, s.team_id, substr(s.starts_at, 1, 10)
+    `).bind(orderId),
+    database.prepare(`
+      INSERT OR IGNORE INTO intervention_tasks (id, intervention_id, order_task_id, status)
+      SELECT lower(hex(randomblob(16))), i.id, ot.id, 'TODO'
+      FROM interventions i JOIN order_tasks ot ON ot.order_id = i.order_id
+      WHERE i.order_id = ?
+    `).bind(orderId),
+  ];
+}
+
 function holdView(row: Record<string, unknown>, slots: Array<{ startsAt: string; endsAt: string }>): ScheduleHoldView {
   const startsAt = slots[0].startsAt;
   const endsAt = slots.at(-1)!.endsAt;

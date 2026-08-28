@@ -710,8 +710,8 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .admin-app > aside { min-height: 100vh; padding: 25px 18px; display: flex; flex-direction: column; color: var(--paper); background: var(--ink); }
 .admin-app > aside img { width: 185px; height: auto; }
 .admin-app > aside nav { margin-top: 45px; display: grid; gap: 3px; }
-.admin-app > aside nav span { padding: 10px 12px; text-align: left; color: rgba(246,244,235,.55); border-radius: 7px; font-size: 10px; }
-.admin-app > aside nav span.active { color: var(--paper); background: rgba(246,244,235,.09); }
+.admin-app > aside nav span, .admin-app > aside nav a { padding: 10px 12px; text-align: left; color: rgba(246,244,235,.55); border-radius: 7px; font-size: 10px; }
+.admin-app > aside nav span.active, .admin-app > aside nav a.active { color: var(--paper); background: rgba(246,244,235,.09); }
 .admin-identity { margin-top: auto; padding: 20px 12px 4px; border-top: 1px solid rgba(246,244,235,.14); }
 .admin-identity strong, .admin-identity small { display: block; }
 .admin-identity strong { font-family: var(--display); font-size: 15px; }
@@ -767,6 +767,30 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .plan-row > div:last-child { justify-self: end; text-align: right; }
 .plan-row > div:last-child span, .plan-row > div:last-child b { display: block; font-size: 9px; }
 .plan-row > div:last-child b { margin-top: 5px; color: var(--bronze); font-weight: 400; }
+.planning-toolbar { margin-top: 35px; padding: 27px 30px; display: flex; align-items: end; justify-content: space-between; gap: 28px; background: var(--ink); color: var(--paper); }
+.planning-toolbar h2 { margin-top: 12px; font-size: clamp(28px,3vw,43px); }
+.planning-toolbar > div:last-child { display: flex; gap: 18px; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+.planning-toolbar a { padding-bottom: 5px; border-bottom: 1px solid rgba(246,244,235,.4); }
+.planning-note { max-width: 740px; margin: 22px 0; color: var(--sage); font-size: 12px; line-height: 1.7; }
+.planning-team-key { display: flex; flex-wrap: wrap; gap: 10px 20px; margin-bottom: 20px; color: var(--sage); font-size: 10px; }
+.planning-team-key span { display: inline-flex; align-items: center; gap: 7px; }
+.planning-team-key i { width: 9px; height: 9px; display: block; background: var(--bronze); border-radius: 50%; }
+.planning-grid { display: grid; grid-template-columns: repeat(7, minmax(190px,1fr)); gap: 9px; overflow-x: auto; padding-bottom: 12px; }
+.planning-grid > article { min-height: 360px; padding: 16px; background: var(--paper); border: 1px solid rgba(33,46,35,.1); }
+.planning-grid > article > header { display: block; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.planning-grid > article > header time { display: block; font-family: var(--display); font-size: 18px; line-height: 1.1; text-transform: capitalize; }
+.planning-grid > article > header small { display: block; margin-top: 7px; color: var(--sage); font-size: 8px; letter-spacing: .12em; text-transform: uppercase; }
+.planning-mission { margin-top: 13px; padding: 13px; background: #e6e7df; border-left: 3px solid var(--bronze); }
+.planning-mission.afternoon { background: #e1e4da; border-left-color: var(--ink); }
+.planning-mission > div { display: flex; justify-content: space-between; gap: 8px; color: var(--sage); font-size: 8px; letter-spacing: .06em; }
+.planning-mission > div span { color: var(--bronze); }
+.planning-mission h2 { margin-top: 13px; font-size: 20px; }
+.planning-mission p { margin-top: 6px; color: var(--sage); font-size: 10px; line-height: 1.45; }
+.planning-mission > small { display: block; margin-top: 10px; font-size: 9px; line-height: 1.45; }
+.planning-mission footer { margin-top: 11px; padding-top: 9px; display: flex; justify-content: space-between; gap: 8px; border-top: 1px solid rgba(33,46,35,.12); font-size: 8px; }
+.planning-mission footer b { font-weight: 500; letter-spacing: .04em; }
+.planning-mission footer em { color: var(--bronze); font-style: normal; }
+.planning-empty { margin-top: 26px; color: var(--sage); font-size: 11px; line-height: 1.5; }
 
 @media (max-width: 900px) {
   .inner-service-grid, .service-detail-hero, .pricing-layout, .project-page { grid-template-columns: 1fr; }
@@ -799,6 +823,7 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
   .admin-identity { margin: 0; padding: 0 0 0 18px; border-top: 0; border-left: 1px solid rgba(246,244,235,.14); white-space: nowrap; }
   .admin-identity strong, .admin-identity small { display: none; }
   .admin-identity button { margin-top: 0; }
+  .planning-toolbar { align-items: flex-start; flex-direction: column; }
 }
 
 @media (max-width: 620px) {

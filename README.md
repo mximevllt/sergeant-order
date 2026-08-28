@@ -12,7 +12,7 @@ Application web de réservation de prestations de paysagisme, construite avec Ne
 - Devis persistants, chiffrés côté serveur, reprenables et rattachables aux comptes et jardins.
 - Contrôle serveur de la zone desservie : tout le Var et listes communales versionnées jusqu’à Marseille et Nice.
 - Disponibilités calculées sur les deux équipes, leurs compétences, horaires et absences, avec verrou anti-double-réservation de 15 minutes.
-- Commandes réelles et garantie bancaire Stripe par SetupIntent : aucun débit à la réservation, webhook signé et conversion durable du créneau dans le planning.
+- Commandes réelles et garantie bancaire Stripe par SetupIntent : aucun débit à la réservation, webhook signé, création idempotente des missions et planning entreprise sécurisé.
 - Région Vercel principale : Paris (`cdg1`).
 
 Le projet ne contient plus de Worker Cloudflare, de liaison D1, de configuration Vite spécifique ni de métadonnée d’hébergement OpenAI Sites.
@@ -100,4 +100,4 @@ Le workflow `.github/workflows/ci.yml` vérifie automatiquement chaque pull requ
 - Le navigateur ne décide pas non plus qu’un créneau est libre : le serveur le recalcule avant l’écriture et l’unicité est garantie par la base.
 - Le navigateur ne confirme jamais lui-même un paiement : seule la réception d’un événement Stripe signé rend la commande et le créneau définitifs.
 
-Consultez aussi `docs/11-migration-github-vercel.md` pour la checklist de bascule, `docs/12-devis-persistants.md` pour les devis, `docs/13-zones-intervention.md` pour le périmètre commercial, `docs/14-disponibilites-et-verrous.md` pour le planning réel et `docs/15-commandes-et-garantie-stripe.md` pour le paiement.
+Consultez aussi `docs/11-migration-github-vercel.md` pour la checklist de bascule, `docs/12-devis-persistants.md` pour les devis, `docs/13-zones-intervention.md` pour le périmètre commercial, `docs/14-disponibilites-et-verrous.md` pour le planning réel, `docs/15-commandes-et-garantie-stripe.md` pour le paiement et `docs/16-planning-entreprise.md` pour le tableau entreprise.

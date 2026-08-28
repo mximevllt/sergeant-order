@@ -1,5 +1,6 @@
 import type Stripe from "stripe";
 import { getDatabase } from "@/db/runtime";
+import { orderInterventionStatements } from "@/modules/scheduling/service";
 
 function metadata(object: Stripe.SetupIntent): { orderId: string; paymentId: string; quoteId: string; holdId: string } | null {
   const { orderId, paymentId, quoteId, holdId } = object.metadata ?? {};
@@ -68,6 +69,7 @@ export async function processStripeEvent(event: Stripe.Event): Promise<"processe
       database.prepare(`INSERT INTO audit_events (id, actor_type, action, entity_type, entity_id, metadata_json) VALUES (?, 'PROVIDER', 'ORDER_CONFIRMED_BY_STRIPE', 'order', ?, ?)`)
         .bind(crypto.randomUUID(), ids.orderId, JSON.stringify({ stripeEventId: event.id, paymentId: ids.paymentId, reservationId: ids.holdId })),
       database.prepare(`UPDATE provider_events SET status = 'PROCESSED', processed_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(eventId),
+      ...orderInterventionStatements(database, ids.orderId),
     ]);
     return "processed";
   }
