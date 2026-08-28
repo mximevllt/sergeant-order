@@ -743,6 +743,8 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .field-app > header { min-height: 82px; padding: 18px 5vw; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(246,244,235,.14); }
 .field-app > header img { width: 190px; height: auto; }
 .field-app > header button { padding: 0 0 6px; color: var(--bronze); background: transparent; border: 0; border-bottom: 1px solid rgba(160,124,80,.5); cursor: pointer; font-size: 8px; letter-spacing: .12em; text-transform: uppercase; }
+.field-app > header > div { display: flex; align-items: center; gap: 18px; }
+.field-app > header > div > span { color: rgba(246,244,235,.58); font-size: 10px; }
 .field-app > section { width: min(920px,90vw); margin: 0 auto; padding: 80px 0 110px; }
 .field-app h1 { margin-top: 16px; font-size: clamp(54px,8vw,100px); }
 .field-app article { margin-top: 50px; padding: clamp(30px,5vw,55px); color: var(--ink); background: var(--paper); border-left: 4px solid var(--bronze); }
@@ -750,6 +752,38 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .field-app article h2 { max-width: 660px; margin-top: 18px; font-size: clamp(31px,4vw,48px); }
 .field-app article p { max-width: 660px; margin-top: 14px; color: var(--sage); font-size: 13px; line-height: 1.7; }
 .field-app section > small { margin-top: 22px; display: block; color: rgba(246,244,235,.48); font-size: 9px; }
+.field-content { width: min(880px,90vw); margin: 0 auto; padding: 70px 0 110px; }
+.field-content > header h1 { margin-top: 13px; font-size: clamp(48px,7vw,83px); }
+.field-content > header > p:last-child { max-width: 590px; margin-top: 17px; color: rgba(246,244,235,.6); font-size: 13px; line-height: 1.7; }
+.field-status { margin-top: 22px; padding: 14px 17px; color: #ffd8d3; background: rgba(158,62,50,.3); border: 1px solid rgba(255,216,211,.25); font-size: 12px; }
+.field-empty { margin-top: 44px; padding: 55px; color: var(--ink); background: var(--paper); border-left: 4px solid var(--bronze); }
+.field-empty span { color: var(--bronze); font-size: 28px; }
+.field-empty h2 { margin-top: 10px; font-size: 37px; }
+.field-empty p { max-width: 520px; margin-top: 11px; color: var(--sage); font-size: 13px; line-height: 1.7; }
+.field-mission-list { display: grid; gap: 18px; margin-top: 42px; }
+.field-mission { padding: 26px; color: var(--ink); background: var(--paper); border-left: 4px solid var(--bronze); }
+.field-mission > header { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
+.field-mission > header span { color: var(--bronze); font-size: 8px; letter-spacing: .18em; text-transform: uppercase; }
+.field-mission > header h2 { margin-top: 7px; font-size: 31px; }
+.field-mission > header time { max-width: 210px; color: var(--sage); font-size: 10px; line-height: 1.5; text-align: right; text-transform: capitalize; }
+.field-address { margin-top: 23px; padding: 16px; background: var(--mist); }
+.field-address strong { font-family: var(--display); font-size: 18px; }
+.field-address p { margin-top: 4px; color: var(--sage); font-size: 11px; }
+.field-address a { display: inline-block; margin-top: 12px; padding-bottom: 3px; border-bottom: 1px solid var(--bronze); color: var(--ink); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+.field-tasks { margin-top: 24px; }
+.field-tasks h3 { font-size: 21px; }
+.field-tasks > div { padding: 13px 0; display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; border-bottom: 1px solid var(--line); }
+.field-tasks > div > strong { font-size: 13px; }
+.field-tasks > div > span { color: var(--sage); font-size: 9px; }
+.field-task-actions { grid-column: 1/-1; display: flex; gap: 7px; }
+.field-task-actions button, .field-mission footer button { border: 1px solid rgba(33,46,35,.22); cursor: pointer; }
+.field-task-actions button { padding: 7px 9px; color: var(--ink); background: transparent; border-radius: 5px; font-size: 8px; }
+.field-mission footer { margin-top: 23px; display: flex; flex-wrap: wrap; gap: 9px; }
+.field-mission footer button { min-height: 43px; padding: 0 15px; border-radius: 7px; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+.field-primary { color: var(--paper); background: var(--ink); }
+.field-secondary { color: var(--ink); background: transparent; }
+.field-mission button:disabled { cursor: wait; opacity: .48; }
+.field-finished { margin-top: 24px; color: var(--bronze); font-size: 11px; line-height: 1.5; }
 .admin-stats { margin-top: 35px; display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
 .admin-stats article { padding: 22px; background: var(--paper); border: 1px solid rgba(33,46,35,.08); }
 .admin-stats span, .admin-stats strong, .admin-stats small { display: block; }
@@ -815,6 +849,8 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
   .client-nav > form { margin: 0 0 0 16px; }
   .client-nav > form + a:last-child { display: none; }
   .client-nav > a:last-child { display: none; }
+  .field-mission > header { align-items: start; flex-direction: column; }
+  .field-mission > header time { text-align: left; }
   .client-content { padding: 40px 5vw 80px; }
   .form-columns { grid-template-columns: 1fr; }
   .admin-app > aside { min-height: auto; padding: 18px; flex-direction: row; align-items: center; gap: 18px; overflow-x: auto; }

@@ -115,6 +115,11 @@ test("Next.js sert les pages publiques et protège les portails", async () => {
   assert.match(planning.headers.get("location") ?? "", /\/connexion-entreprise\?returnTo=/u);
   const planningApi = await request("/api/admin/planning", { accept: "application/json" });
   assert.equal(planningApi.status, 401);
+  const field = await request("/terrain");
+  assert.equal(field.status, 307);
+  assert.match(field.headers.get("location") ?? "", /\/connexion-entreprise\?returnTo=/u);
+  const fieldApi = await request("/api/field/interventions", { accept: "application/json" });
+  assert.equal(fieldApi.status, 401);
   const payment = await request("/paiement?devis=devis-inconnu");
   assert.equal(payment.status, 307);
   assert.match(decodeURIComponent(payment.headers.get("location") ?? ""), /returnTo=\/paiement\?devis=/u);
