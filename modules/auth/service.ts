@@ -107,14 +107,16 @@ function assertEmailDeliveryAvailable(request: Request): void {
   }
 }
 
-async function provisionInitialAdmin(database: AppDatabase, email: string, ipHash: string): Promise<void> {
-  const bootstrapEmail = normalizeEmail(runtimeValue("INITIAL_ADMIN_EMAIL"));
-  if (!bootstrapEmail || bootstrapEmail !== email || !isValidEmail(bootstrapEmail)) return;
+function staffAllowlist(): string[] {
+  return [...new Set(runtimeValue("STAFF_ALLOWED_EMAILS").split(",").map((entry) => normalizeEmail(entry)).filter(isValidEmail))];
+}
 
-  const adminCount = await database.prepare(`
-    SELECT COUNT(*) AS count FROM user_roles WHERE role = 'ADMIN'
-  `).first<{ count: number }>();
-  if (Number(adminCount?.count ?? 0) > 0) return;
+function bootstrapAdminEmails(): string[] {
+  return [...new Set([...staffAllowlist(), normalizeEmail(runtimeValue("INITIAL_ADMIN_EMAIL"))].filter(isValidEmail))];
+}
+
+async function provisionBootstrapAdmin(database: AppDatabase, email: string, ipHash: string): Promise<void> {
+  if (!bootstrapAdminEmails().includes(email)) return;
 
   const existing = await database.prepare(`
     SELECT id, status FROM users WHERE email_normalized = ? LIMIT 1
@@ -136,7 +138,7 @@ async function provisionInitialAdmin(database: AppDatabase, email: string, ipHas
     database.prepare(`
       INSERT INTO audit_events
         (id, actor_type, action, entity_type, entity_id, ip_hash, metadata_json)
-      VALUES (?, 'SYSTEM', 'INITIAL_ADMIN_PROVISIONED', 'user', ?, ?, ?)
+      VALUES (?, 'SYSTEM', 'BOOTSTRAP_ADMIN_PROVISIONED', 'user', ?, ?, ?)
     `).bind(crypto.randomUUID(), userId, ipHash, JSON.stringify({ source: "HOSTING_CONFIGURATION" })),
   );
   await database.batch(statements);
@@ -189,7 +191,8 @@ export async function requestMagicLink(
 
   assertEmailDeliveryAvailable(request);
 
-  if (audience === "STAFF") await provisionInitialAdmin(database, email, ipHash);
+  const allowedStaffEmails = staffAllowlist();
+  if (audience === "STAFF") await provisionBootstrapAdmin(database, email, ipHash);
 
   const existingRoles = await database.prepare(`
     SELECT GROUP_CONCAT(ur.role) AS roles, u.status
@@ -200,7 +203,10 @@ export async function requestMagicLink(
     LIMIT 1
   `).bind(email).first<{ roles: string | null; status: string }>();
   const roleList = existingRoles?.roles?.split(",").filter(Boolean) ?? [];
-  const staffAllowed = Boolean(existingRoles && ["INVITED", "ACTIVE"].includes(existingRoles.status) && hasAnyStaffRole(roleList));
+  const staffAllowed = Boolean(
+    existingRoles && ["INVITED", "ACTIVE"].includes(existingRoles.status) && hasAnyStaffRole(roleList)
+      && (allowedStaffEmails.length === 0 || allowedStaffEmails.includes(email)),
+  );
   if (audience === "STAFF" && !staffAllowed) {
     const deniedId = crypto.randomUUID();
     const deniedHash = await hashSecret(`denied:${randomToken()}`, secret);

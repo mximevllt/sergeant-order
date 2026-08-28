@@ -10,7 +10,7 @@ export const CORE_VARIABLES = Object.freeze([
   "AICI_MODE",
 ]);
 
-export const OPTIONAL_VARIABLES = Object.freeze(["INITIAL_ADMIN_EMAIL"]);
+export const OPTIONAL_VARIABLES = Object.freeze(["INITIAL_ADMIN_EMAIL", "STAFF_ALLOWED_EMAILS"]);
 
 export const SECRET_VARIABLES = Object.freeze([
   "TURSO_AUTH_TOKEN",
@@ -181,6 +181,10 @@ export function inspectEnvironment(source = {}, options = {}) {
   }
   if (values.INITIAL_ADMIN_EMAIL && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.INITIAL_ADMIN_EMAIL)) {
     errors.push("INITIAL_ADMIN_EMAIL n'est pas une adresse valide.");
+  }
+  if (values.STAFF_ALLOWED_EMAILS) {
+    const invalidStaffEmail = values.STAFF_ALLOWED_EMAILS.split(",").map((email) => email.trim()).find((email) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
+    if (invalidStaffEmail) errors.push("STAFF_ALLOWED_EMAILS doit contenir uniquement des adresses e-mail séparées par des virgules.");
   }
   addModeChecks(environment, values, errors);
 

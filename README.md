@@ -72,6 +72,8 @@ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
 
 Stripe est maintenant raccordé. En mode `test` ou `live`, ses trois variables sont obligatoires et le webhook Stripe doit cibler `/api/webhooks/stripe`. Resend, Urssaf, Sentry et Turnstile seront activés dans leurs étapes fonctionnelles respectives. Le mode production refuse les configurations incomplètes ou les clés Stripe de test.
 
+`INITIAL_ADMIN_EMAIL` crée le premier administrateur lors de sa première demande de lien. Pour une phase de lancement restreinte, `STAFF_ALLOWED_EMAILS` peut contenir une liste d’adresses séparées par des virgules : seules ces adresses pourront recevoir une session entreprise, même si d’autres comptes disposent d’un rôle interne.
+
 Avec cette configuration minimale, la santé d’une préproduction vérifie le socle et l’authentification. En production, `/api/health` exige en plus toutes les intégrations réelles avant de répondre `200`.
 
 ## Base de données
