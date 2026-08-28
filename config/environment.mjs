@@ -10,7 +10,7 @@ export const CORE_VARIABLES = Object.freeze([
   "AICI_MODE",
 ]);
 
-export const OPTIONAL_VARIABLES = Object.freeze(["INITIAL_ADMIN_EMAIL", "STAFF_ALLOWED_EMAILS"]);
+export const OPTIONAL_VARIABLES = Object.freeze(["INITIAL_ADMIN_EMAIL", "STAFF_ALLOWED_EMAILS", "TEST_ADMIN_BYPASS"]);
 
 export const SECRET_VARIABLES = Object.freeze([
   "TURSO_AUTH_TOKEN",

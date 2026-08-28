@@ -74,6 +74,8 @@ Stripe est maintenant raccordé. En mode `test` ou `live`, ses trois variables s
 
 `INITIAL_ADMIN_EMAIL` crée le premier administrateur lors de sa première demande de lien. Pour une phase de lancement restreinte, `STAFF_ALLOWED_EMAILS` peut contenir une liste d’adresses séparées par des virgules : seules ces adresses pourront recevoir une session entreprise, même si d’autres comptes disposent d’un rôle interne.
 
+Pour une recette isolée, `TEST_ADMIN_BYPASS=enabled` permet temporairement aux seules adresses de `STAFF_ALLOWED_EMAILS` d’ouvrir directement l’administration. Ce mode crée une session serveur de huit heures, ne désactive pas les contrôles de droits internes et doit impérativement être supprimé avant toute mise en service réelle.
+
 Avec cette configuration minimale, la santé d’une préproduction vérifie le socle et l’authentification. En production, `/api/health` exige en plus toutes les intégrations réelles avant de répondre `200`.
 
 ## Base de données

@@ -69,6 +69,7 @@ export class AuthConfigurationError extends Error {}
 export class AuthDeliveryError extends Error {}
 export class InvalidMagicLinkError extends Error {}
 export class DisabledAccountError extends Error {}
+export class TestAdminBypassDeniedError extends Error {}
 
 function getAuthSecret(): string {
   const secret = runtimeValue("AUTH_SECRET");
@@ -289,6 +290,39 @@ export async function requestMagicLink(
     if (error instanceof AuthDeliveryError) throw error;
     throw new AuthDeliveryError("AUTH_EMAIL_DELIVERY_FAILED");
   }
+}
+
+/**
+ * Accès volontairement temporaire pour la recette. Il dépend d'une variable
+ * explicite Vercel et de la liste blanche serveur, puis crée une session normale
+ * stockée en base afin que les contrôles de droits applicatifs restent inchangés.
+ */
+export async function startTestAdminSession(request: Request, emailInput: unknown): Promise<{ token: string; maxAgeSeconds: number; returnTo: string }> {
+  const email = normalizeEmail(emailInput);
+  if (runtimeValue("TEST_ADMIN_BYPASS") !== "enabled" || !isValidEmail(email) || !staffAllowlist().includes(email)) {
+    throw new TestAdminBypassDeniedError("TEST_ADMIN_BYPASS_DENIED");
+  }
+  const database = getDatabase();
+  const secret = getAuthSecret();
+  const ipHash = await hashSecret(`ip:${getClientIp(request)}`, secret);
+  await provisionBootstrapAdmin(database, email, ipHash);
+  const user = await database.prepare(`
+    SELECT id, full_name AS fullName, status FROM users WHERE email_normalized = ? LIMIT 1
+  `).bind(email).first<{ id: string; fullName: string; status: string }>();
+  if (!user || !["INVITED", "ACTIVE"].includes(user.status)) throw new TestAdminBypassDeniedError("TEST_ADMIN_NOT_AVAILABLE");
+
+  const sessionId = crypto.randomUUID();
+  const token = randomToken();
+  const maxAgeSeconds = STAFF_SESSION_TTL_SECONDS;
+  const expiresAt = new Date(Date.now() + maxAgeSeconds * 1000).toISOString();
+  await database.batch([
+    database.prepare(`UPDATE users SET status = 'ACTIVE', email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP), last_login_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(user.id),
+    database.prepare(`UPDATE auth_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE user_id = ? AND kind = 'STAFF' AND revoked_at IS NULL`).bind(user.id),
+    database.prepare(`INSERT INTO auth_sessions (id, user_id, token_hash, kind, expires_at, ip_hash, user_agent) VALUES (?, ?, ?, 'STAFF', ?, ?, ?)`).bind(sessionId, user.id, await hashSecret(`session:${token}`, secret), expiresAt, ipHash, getUserAgent(request)),
+    database.prepare(`INSERT INTO audit_events (id, actor_user_id, actor_type, action, entity_type, entity_id, ip_hash, metadata_json) VALUES (?, ?, 'SYSTEM', 'TEST_ADMIN_BYPASS_SIGN_IN', 'auth_session', ?, ?, ?)`)
+      .bind(crypto.randomUUID(), user.id, sessionId, ipHash, JSON.stringify({ expiresAt })),
+  ]);
+  return { token, maxAgeSeconds, returnTo: "/admin" };
 }
 
 export async function verifyMagicLink(request: Request, token: string): Promise<{

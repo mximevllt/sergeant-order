@@ -9,7 +9,7 @@ type RequestState =
   | { status: "sent"; email: string; previewUrl?: string }
   | { status: "error"; message: string };
 
-export function StaffLoginForm({ returnTo }: { returnTo: string }) {
+export function StaffLoginForm({ returnTo, testAccess = false }: { returnTo: string; testAccess?: boolean }) {
   const [state, setState] = useState<RequestState>({ status: "idle" });
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -19,16 +19,17 @@ export function StaffLoginForm({ returnTo }: { returnTo: string }) {
     const email = String(data.get("email") ?? "").trim();
     setState({ status: "sending" });
     try {
-      const response = await fetch("/api/auth/staff/magic-link/request", {
+      const response = await fetch(testAccess ? "/api/auth/staff/test-access" : "/api/auth/staff/magic-link/request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, returnTo }),
+        body: JSON.stringify(testAccess ? { email } : { email, returnTo }),
       });
-      const payload = await response.json() as { previewUrl?: string; message?: string };
+      const payload = await response.json() as { previewUrl?: string; message?: string; redirect?: string };
       if (!response.ok) {
-        setState({ status: "error", message: payload.message ?? "Impossible d’envoyer le lien pour le moment." });
+        setState({ status: "error", message: payload.message ?? (testAccess ? "Cette adresse n’est pas autorisée pour le test." : "Impossible d’envoyer le lien pour le moment.") });
         return;
       }
+      if (testAccess) { window.location.assign(payload.redirect ?? "/admin"); return; }
       setState({ status: "sent", email, previewUrl: payload.previewUrl });
       form.reset();
     } catch {
@@ -40,5 +41,5 @@ export function StaffLoginForm({ returnTo }: { returnTo: string }) {
     return <div className="login-confirmation" role="status"><span aria-hidden="true">✓</span><p>Demande prise en compte</p><h1>Consultez votre messagerie.</h1><p>Si <strong>{state.email}</strong> correspond à un compte autorisé, le lien personnel reste valable 10 minutes.</p>{state.previewUrl && <a className="button button-primary" href={state.previewUrl}>Ouvrir le lien de test <span>→</span></a>}<button type="button" onClick={() => setState({ status: "idle" })}>Utiliser une autre adresse</button></div>;
   }
 
-  return <form className="login-form" onSubmit={submit}><label>Adresse email professionnelle<input name="email" type="email" inputMode="email" autoComplete="email" maxLength={254} required placeholder="prenom@sergeant-paysage.fr" /></label>{state.status === "error" && <p className="login-error" role="alert">{state.message}</p>}<button className="button button-primary" type="submit" disabled={state.status === "sending"}>{state.status === "sending" ? "Vérification…" : "Recevoir mon accès"}<span>→</span></button><p className="login-privacy">Seules les personnes préalablement invitées peuvent ouvrir l’espace entreprise.</p><Link href="/">← Retour au site</Link></form>;
+  return <form className="login-form" onSubmit={submit}><label>Adresse email professionnelle<input name="email" type="email" inputMode="email" autoComplete="email" maxLength={254} required placeholder="prenom@sergeant-paysage.fr" /></label>{state.status === "error" && <p className="login-error" role="alert">{state.message}</p>}<button className="button button-primary" type="submit" disabled={state.status === "sending"}>{state.status === "sending" ? "Vérification…" : testAccess ? "Accéder à l’administration" : "Recevoir mon accès"}<span>→</span></button><p className="login-privacy">{testAccess ? "Mode de test temporaire : seules les adresses autorisées dans Vercel peuvent ouvrir l’administration." : "Seules les personnes préalablement invitées peuvent ouvrir l’espace entreprise."}</p><Link href="/">← Retour au site</Link></form>;
 }
