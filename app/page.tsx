@@ -36,14 +36,13 @@ export default function Home() {
           <p className="tax-note">Jusqu’à 50 % de crédit d’impôt sur les prestations éligibles*</p>
         </div>
         <div className="hero-visual reveal-now">
-          <div className="hero-image-wrap"><Image src="/images/hero-gardener.jpg" alt="Paysagiste de dos entretenant une grande pelouse" width={1800} height={2400} sizes="(max-width: 820px) 92vw, 48vw" priority /></div>
+          <div className="hero-image-wrap"><Image src="/images/hero-balais.png" alt="Deux jardiniers Sergeant Paysage entretenant une allée" width={1063} height={1535} sizes="(max-width: 820px) 92vw, 48vw" priority /></div>
           <div className="booking-float">
             <span className="booking-status">Réservé <b>✓</b></span>
             <small>Jeudi 20 août</small>
             <strong>08:00 — 12:00</strong>
             <p>Tonte + taille de haies<br />1 demi-journée</p>
           </div>
-          <div className="hero-coordinate">43°24’ N<br />06°03’ E</div>
         </div>
       </section>
 

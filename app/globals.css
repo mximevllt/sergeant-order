@@ -88,7 +88,6 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .booking-float p { margin-top: 15px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--sage); font-size: 12px; line-height: 1.6; }
 .booking-status { position: absolute; top: 19px; right: 18px; color: var(--sage); font-size: 10px; text-transform: uppercase; letter-spacing: .12em; }
 .booking-status b { color: var(--bronze); }
-.hero-coordinate { position: absolute; top: 7%; left: 2%; width: 104px; height: 104px; display: grid; place-items: center; text-align: center; color: var(--paper); background: rgba(33,46,35,.74); border: 1px solid rgba(246,244,235,.6); border-radius: 50%; font-size: 9px; line-height: 1.7; letter-spacing: .18em; }
 
 .section { padding: 125px 7vw; }
 .section-label { display: flex; align-items: center; gap: 15px; color: var(--ink); font-size: 10px; letter-spacing: .36em; text-transform: uppercase; }
@@ -1071,7 +1070,6 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 }
 
 @media (max-width: 560px) {
-  .hero-coordinate { display: none; }
   .hero-visual { height: 470px; }
   .hero-image-wrap { inset-left: 0; }
   .booking-float { bottom: -20px; }
