@@ -28,17 +28,20 @@ const taskPresentation: Record<string, { title: string }> = {
   COMPLETE_MAINTENANCE: { title: "Entretenir tout le jardin" },
 };
 
+const taskPictograms: Record<string, string> = {
+  MOWING: "/images/booking-icons/mowing.png",
+  HEDGE_TRIMMING: "/images/booking-icons/hedge-trimming.png",
+  BRUSH_CLEARING: "/images/booking-icons/brush-clearing.png",
+  FLOWER_BEDS: "/images/booking-icons/flower-beds.png",
+  GARDEN_CLEANING: "/images/booking-icons/garden-cleaning.png",
+  COMPLETE_MAINTENANCE: "/images/booking-icons/complete-maintenance.png",
+};
+
 function TaskPictogram({ code }: { code: string }) {
-  const common = { fill: "none", stroke: "currentColor", strokeWidth: 2.5, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
-  return <span className={`task-pictogram task-pictogram-${code.toLowerCase()}`} aria-hidden="true"><svg viewBox="0 0 96 96" role="img">
-    {code === "MOWING" && <><path {...common} d="M15 76h66M18 76l5-7M29 76l-3-9M70 76l5-9" /><path {...common} d="M28 65h32l-5-20H35l-7 20Z" /><path {...common} d="M42 45 36 30h20l10 17M64 47l13-14" /><path {...common} d="M75 33l5 6" /><circle {...common} cx="34" cy="68" r="6" /><circle {...common} cx="57" cy="68" r="6" /><path {...common} d="M18 61c3-5 6-6 9-1M21 68c4-4 7-4 10 0" /></>}
-    {code === "HEDGE_TRIMMING" && <><path {...common} d="M16 75h64M18 75V44c0-8 6-14 14-14h24c8 0 14 6 14 14v31" /><path {...common} d="M24 45h42M24 57h42" /><path {...common} d="M53 27c3-9 13-12 19-7M39 30c-3-8-12-10-18-5" /><path {...common} d="m54 67 20-20 6 6-20 20-8 2 2-8Z" /><path {...common} d="m69 52 6 6M64 57l6 6M59 62l6 6" /></>}
-    {code === "BRUSH_CLEARING" && <><path {...common} d="M17 76h62M22 76l-4-9M31 76l-1-12M69 76l7-13" /><circle {...common} cx="42" cy="24" r="7" /><path {...common} d="M38 32 31 51l13 13 9-17-15-15ZM31 51l-9 16M44 64l10 12" /><path {...common} d="m50 41 22 15M61 49l6-10M70 55l9 2" /><circle {...common} cx="76" cy="59" r="7" /><path {...common} d="M71 65l10-11M69 72c4-4 8-5 12-1M17 62c3-5 7-5 10 0" /></>}
-    {code === "FLOWER_BEDS" && <><path {...common} d="M15 76h66M22 76c2-12 10-18 21-18s18 6 20 18" /><path {...common} d="M36 58V39M56 58V34M36 39c-8 0-12-5-12-12 8 0 12 5 12 12ZM36 39c8 0 12-5 12-12-8 0-12 5-12 12Z" /><path {...common} d="M56 34c-8 0-12-5-12-12 8 0 12 5 12 12ZM56 34c8 0 12-5 12-12-8 0-12 5-12 12Z" /><circle {...common} cx="36" cy="27" r="3" /><circle {...common} cx="56" cy="22" r="3" /><path {...common} d="m75 70-9-19M66 51l-7 11M66 51l10 1" /></>}
-    {code === "GARDEN_CLEANING" && <><path {...common} d="M16 76h65M47 22v45M29 68h36" /><path {...common} d="M29 68 23 55h48l-6 13M31 55l3 13M39 55l2 13M55 55l-2 13M63 55l-3 13" /><path {...common} d="M22 45c5-9 14-10 20-4-7 8-16 8-20 4ZM63 38c6-7 15-5 19 3-8 5-16 3-19-3ZM71 51c5-5 12-4 15 2-6 4-12 3-15-2Z" /></>}
-    {code === "COMPLETE_MAINTENANCE" && <><circle {...common} cx="36" cy="25" r="7" /><path {...common} d="M33 33 27 52l13 12 10-18-17-13ZM27 52l-9 17M40 64l8 12" /><path {...common} d="M50 43h19l10 20H54l-7-12M58 63v13M75 63v13" /><path {...common} d="M53 44h19M66 44l6-12M75 32l6 6" /><path {...common} d="M15 76h68M19 76l5-8M45 76l4-8" /></>}
-    {!taskPresentation[code] && <><path {...common} d="M16 76h64M24 76V48c0-13 10-23 24-23s24 10 24 23v28" /><path {...common} d="M31 49h34M48 25V16M39 21l9-5 9 5" /></>}
-  </svg></span>;
+  const src = taskPictograms[code];
+  return <span className={`task-pictogram task-pictogram-${code.toLowerCase()}`} aria-hidden="true">
+    {src ? <Image src={src} alt="" fill sizes="130px" priority /> : null}
+  </span>;
 }
 
 const emptyTotals: TotalData = { intervention: 0, taskFee: 0, detailFee: 0, accessFee: 0, evacuation: 0, reduction: 0, total: 0, afterTax: 0 };
