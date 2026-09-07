@@ -1,5 +1,6 @@
 import { getDatabase } from "@/db/runtime";
-import { calculatePrice, packagePriceTtcCents, recommendedPackage, type PricingInput, type PricingRule } from "./engine";
+import { calculatePrice, recommendedPackage, type PricingInput, type PricingRule } from "./engine";
+import { getBookingRates } from "./booking-rates";
 
 export class PricingInputError extends Error {
   constructor(public fields: Record<string, string>) { super("PRICING_INPUT_INVALID"); }
@@ -57,11 +58,12 @@ export async function estimatePrice(value: unknown): Promise<Estimate> {
   if (taskCodes.some((code) => !activeCodes.has(code))) throw new PricingInputError({ taskCodes: "Une prestation sélectionnée n’est plus disponible." });
   const ruleRows = await db.prepare(`SELECT code, label, rule_type AS ruleType, condition_json AS conditionJson, calculation_json AS calculationJson FROM pricing_rules WHERE pricing_version_id = ? AND active = 1 ORDER BY priority, code`).bind(String(version.id)).all<Record<string, unknown>>();
   const rules: PricingRule[] = ruleRows.results.map((row) => ({ code: String(row.code), label: String(row.label), ruleType: String(row.ruleType), condition: parseJson(row.conditionJson), calculation: parseJson(row.calculationJson) }));
-  const calculatedLines = calculatePrice(input, rules);
+  const [calculatedLines, bookingRates] = [calculatePrice(input, rules), await getBookingRates()];
+  const packageRate = bookingRates[input.packageCode];
   // Le forfait reste fiable pendant le déploiement du nouveau barème, même si
   // une base n'a pas encore exécuté sa migration tarifaire.
-  const lines = calculatedLines.some(({ code }) => code === "PACKAGE") ? calculatedLines : [
-    { code: "PACKAGE", label: "Forfait intervention TTC", category: "intervention" as const, amountTtcCents: packagePriceTtcCents(input.packageCode) },
+  const lines = calculatedLines.some(({ code }) => code === "PACKAGE") ? calculatedLines.map((line) => line.code === "PACKAGE" ? { ...line, label: packageRate.label, amountTtcCents: packageRate.priceTtcCents } : line) : [
+    { code: "PACKAGE", label: packageRate.label, category: "intervention" as const, amountTtcCents: packageRate.priceTtcCents },
     ...(input.greenWaste === "REMOVE_1_TO_2M3" ? [{ code: "GREEN_WASTE_1_TO_2M3", label: "Évacuation de 1 à 2 m³", category: "waste" as const, amountTtcCents: 2800 }] : []),
   ];
   const recommended = recommendedPackage(input);

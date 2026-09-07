@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 type CatalogTask = { code: string; label: string; description: string; measurementKind: string; eligibleSap: boolean; sortOrder: number };
 type TotalData = { intervention: number; taskFee: number; detailFee: number; accessFee: number; evacuation: number; reduction: number; total: number; afterTax: number };
 type PackageCode = "TWO_HOURS" | "HALF_DAY" | "FULL_DAY" | "TWO_DAYS";
+type PackageDetails = { label: string; hours: string; halfDays: number; price: number; sortOrder: number };
 type PricingResponse = { recommendedPackage: PackageCode; warnings: string[]; totals: TotalData; pricingVersion: { version: number; label: string } };
 type SavedQuote = { id: string; publicReference: string; status: string; contactEmail: string; contactPhone: string | null; gardenId: string | null; requestSnapshot: Record<string, unknown>; updatedAt: string };
 type GardenOption = { id: string; label: string; line1: string; line2: string | null; postalCode: string; city: string };
@@ -46,14 +47,15 @@ function TaskPictogram({ code }: { code: string }) {
 
 const emptyTotals: TotalData = { intervention: 0, taskFee: 0, detailFee: 0, accessFee: 0, evacuation: 0, reduction: 0, total: 0, afterTax: 0 };
 
-const packageDetails: Record<PackageCode, { label: string; hours: string; halfDays: number; price: number }> = {
-  TWO_HOURS: { label: "Forfait 2 heures", hours: "2 h", halfDays: 1, price: 350 },
-  HALF_DAY: { label: "Demi-journée", hours: "4 h", halfDays: 1, price: 520 },
-  FULL_DAY: { label: "Journée complète", hours: "8 h", halfDays: 2, price: 980 },
-  TWO_DAYS: { label: "Deux journées", hours: "16 h", halfDays: 4, price: 1900 },
+const defaultPackageDetails: Record<PackageCode, PackageDetails> = {
+  TWO_HOURS: { label: "Forfait 2 heures", hours: "2 h", halfDays: 1, price: 350, sortOrder: 10 },
+  HALF_DAY: { label: "Demi-journée", hours: "4 h", halfDays: 1, price: 520, sortOrder: 20 },
+  FULL_DAY: { label: "Journée complète", hours: "8 h", halfDays: 2, price: 980, sortOrder: 30 },
+  TWO_DAYS: { label: "Deux journées", hours: "16 h", halfDays: 4, price: 1900, sortOrder: 40 },
 };
+const packageCodes = Object.keys(defaultPackageDetails) as PackageCode[];
 
-function durationLabel(packageCode: PackageCode) { return packageDetails[packageCode].label; }
+function durationLabel(packageCode: PackageCode, details: Record<PackageCode, PackageDetails>) { return details[packageCode].label; }
 
 function serviceAreaParts(address: string): { postalCode: string; city: string } | null {
   const matches = [...address.matchAll(/\b(\d{5})\s+([^,]+)/gu)];
@@ -76,6 +78,7 @@ export default function BookingPage() {
   const [hedgeHeight, setHedgeHeight] = useState("1,5–2 m");
   const [hedgeFaces, setHedgeFaces] = useState("3 faces");
   const [packageCode, setPackageCode] = useState<PackageCode>("HALF_DAY");
+  const [packageDetails, setPackageDetails] = useState<Record<PackageCode, PackageDetails>>(defaultPackageDetails);
   const [waste, setWaste] = useState("broyer");
   const [priority, setPriority] = useState<string[]>(["MOWING", "HEDGE_TRIMMING"]);
   const [scheduleMode, setScheduleMode] = useState("soon");
@@ -141,7 +144,7 @@ export default function BookingPage() {
     for (const [key, setter] of setters) { const value = stringValue(key); if (value !== null) setter(key === "waste" && value === "laisser" ? "broyer" : key === "hedgeHeight" && value === "+ 3 m" ? "2,5–3 m" : value); }
     const restoredSelected = stringList("selected"); if (restoredSelected?.length) setSelected(restoredSelected);
     const restoredPriority = stringList("priority"); if (restoredPriority?.length) setPriority(restoredPriority);
-    const restoredPackage = stringValue("packageCode"); if (restoredPackage && restoredPackage in packageDetails) setPackageCode(restoredPackage as PackageCode);
+    const restoredPackage = stringValue("packageCode"); if (restoredPackage && packageCodes.includes(restoredPackage as PackageCode)) setPackageCode(restoredPackage as PackageCode);
     const restoredLength = numberValue("hedgeLength"); if (restoredLength) setHedgeLength(restoredLength);
     const restoredStep = numberValue("step"); if (restoredStep) setStep(Math.min(6, Math.max(1, restoredStep)));
     if (typeof snapshot.unknownNeed === "boolean") setUnknownNeed(snapshot.unknownNeed);
@@ -185,6 +188,22 @@ export default function BookingPage() {
       }
       setDraftReady(true);
     })().catch(() => setDraftReady(true));
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/pricing/packages", { signal: controller.signal }).then(async (response) => {
+      if (!response.ok) throw new Error("PACKAGES_UNAVAILABLE");
+      const data = await response.json() as { packages?: Array<{ code: string; label: string; hoursLabel: string; halfDays: number; priceTtcCents: number; sortOrder: number }> };
+      const next = { ...defaultPackageDetails };
+      for (const item of data.packages ?? []) {
+        if (!packageCodes.includes(item.code as PackageCode) || !Number.isFinite(item.priceTtcCents)) continue;
+        const code = item.code as PackageCode;
+        next[code] = { label: item.label, hours: item.hoursLabel, halfDays: item.halfDays, price: item.priceTtcCents / 100, sortOrder: item.sortOrder };
+      }
+      setPackageDetails(next);
+    }).catch(() => undefined);
     return () => controller.abort();
   }, []);
 
@@ -385,11 +404,15 @@ export default function BookingPage() {
   const selectedLabels = selected.map(taskLabel);
   const selectedAvailability = availability.find(({ startsAt }) => startsAt === selectedStart) ?? null;
   const displayedTotals: TotalData = useMemo(() => {
-    const intervention = packageDetails[packageCode].price;
+    // Tant que la réponse de calcul correspondant aux réponses courantes n'est
+    // pas arrivée, le résumé affiche le tarif du forfait déjà chargé. Le test
+    // par clé (plutôt que par valeur) permet aussi de conserver un tarif à 0 €
+    // si Quentin le configure intentionnellement dans le CRM.
+    const intervention = pricedInputKey === pricingInputKey ? totals.intervention : packageDetails[packageCode].price;
     const evacuation = waste === "emporter" ? 28 : 0;
     const total = intervention + evacuation;
     return { ...totals, intervention, taskFee: 0, detailFee: 0, accessFee: 0, evacuation, reduction: 0, total, afterTax: Math.ceil(total / 2) };
-  }, [packageCode, totals, waste]);
+  }, [packageCode, packageDetails, pricedInputKey, pricingInputKey, totals, waste]);
   const canAdvance = step !== 4 || Boolean(selectedAvailability);
   const canFinish = legal && EMAIL_PATTERN.test(email) && Boolean(fullName.trim()) && areaStatus.state === "eligible" && Boolean(selectedAvailability) && !holding;
 
@@ -405,10 +428,10 @@ export default function BookingPage() {
         <section className="booking-main" key={step}>
           {step === 1 && <StepNeeds tasks={tasks} catalogError={catalogError} selected={selected} toggleTask={toggleTask} unknownNeed={unknownNeed} setUnknownNeed={setUnknownNeed} unknownDescription={unknownDescription} setUnknownDescription={setUnknownDescription} />}
           {step === 2 && <StepDetails selected={selected} lawnSurface={lawnSurface} setLawnSurface={updateLawnSurface} grass={grass} setGrass={setGrass} terrain={terrain} setTerrain={setTerrain} hedgeLength={hedgeLength} setHedgeLength={setHedgeLength} hedgeHeight={hedgeHeight} setHedgeHeight={updateHedgeHeight} hedgeFaces={hedgeFaces} setHedgeFaces={setHedgeFaces} />}
-          {step === 3 && <StepDuration packageCode={packageCode} setPackageCode={setPackageCode} recommended={recommended} priority={priority} taskLabel={taskLabel} warnings={pricingWarnings} movePriority={movePriority} waste={waste} setWaste={setWaste} />}
+          {step === 3 && <StepDuration packageCode={packageCode} packages={packageDetails} setPackageCode={setPackageCode} recommended={recommended} priority={priority} taskLabel={taskLabel} warnings={pricingWarnings} movePriority={movePriority} waste={waste} setWaste={setWaste} />}
           {step === 4 && <StepSchedule mode={scheduleMode} setMode={setScheduleMode} date={date} setDate={setDate} customDate={customDate} setCustomDate={setCustomDate} setSlot={setSlot} selectedStart={selectedStart} setSelectedStart={setSelectedStart} options={availability} state={availabilityState} message={availabilityMessage} />}
           {step === 5 && <StepAccess access={access} setAccess={setAccess} accessType={accessType} setAccessType={setAccessType} animal={animal} setAnimal={setAnimal} notes={notes} setNotes={setNotes} />}
-          {step === 6 && <StepCheckout address={address} setAddress={setAddress} selected={selectedLabels} selectedAvailability={selectedAvailability} packageCode={packageCode} waste={waste} totals={displayedTotals} legal={legal} setLegal={setLegal} fullName={fullName} setFullName={setFullName} email={email} setEmail={setEmail} phone={phone} setPhone={setPhone} gardens={gardens} gardenId={gardenId} setGardenId={setGardenId} areaStatus={areaStatus} />}
+          {step === 6 && <StepCheckout address={address} setAddress={setAddress} selected={selectedLabels} selectedAvailability={selectedAvailability} packageCode={packageCode} packages={packageDetails} waste={waste} totals={displayedTotals} legal={legal} setLegal={setLegal} fullName={fullName} setFullName={setFullName} email={email} setEmail={setEmail} phone={phone} setPhone={setPhone} gardens={gardens} gardenId={gardenId} setGardenId={setGardenId} areaStatus={areaStatus} />}
 
           {pricingError && <p className="pricing-error" role="alert">Le tarif n’a pas pu être recalculé. Vérifiez votre connexion avant de continuer.</p>}
           {saveState !== "idle" && <p className={`quote-save-state${saveState === "error" ? " error" : ""}`} role={saveState === "error" ? "alert" : "status"}>{saveState === "saving" ? "Enregistrement sécurisé du devis…" : saveState === "saved" ? `Devis ${quoteReference} enregistré automatiquement.` : "Le devis n’a pas pu être enregistré. Vos réponses restent sauvegardées sur cet appareil."}</p>}
@@ -418,11 +441,11 @@ export default function BookingPage() {
             {step < 6 ? <button className={`button button-primary${canAdvance ? "" : " disabled"}`} disabled={!canAdvance} onClick={goNext}>Continuer <span>→</span></button> : <button type="button" className={`button button-primary final-book${canFinish ? "" : " disabled"}`} disabled={!canFinish || saveState === "saving"} onClick={() => void finishQuote()}>{holding ? "Blocage du créneau…" : `Bloquer ce créneau — ${displayedTotals.total} € TTC`}</button>}
           </div>
         </section>
-        <Summary address={address} selected={selected} taskLabel={taskLabel} lawnSurface={lawnSurface} hedgeLength={hedgeLength} hedgeHeight={hedgeHeight} packageCode={packageCode} waste={waste} totals={displayedTotals} pricingLabel={pricingLabel} />
+        <Summary address={address} selected={selected} taskLabel={taskLabel} lawnSurface={lawnSurface} hedgeLength={hedgeLength} hedgeHeight={hedgeHeight} packageCode={packageCode} packages={packageDetails} waste={waste} totals={displayedTotals} pricingLabel={pricingLabel} />
       </div>
       <div className="mobile-price-bar">
         {step === 1 ? <Link className="mobile-back" href="/" aria-label="Retour à l’accueil">←</Link> : <button className="mobile-back" onClick={goBack} aria-label="Étape précédente">←</button>}
-        <div><strong>{displayedTotals.total} €</strong><small>{durationLabel(packageCode)}</small></div>
+        <div><strong>{displayedTotals.total} €</strong><small>{durationLabel(packageCode, packageDetails)}</small></div>
         {step < 6 ? <button className={canAdvance ? "" : "disabled"} disabled={!canAdvance} onClick={goNext}>Continuer →</button> : <button className={canFinish ? "" : "disabled"} disabled={!canFinish} onClick={() => void finishQuote()}>{holding ? "Blocage…" : "Bloquer"}</button>}
       </div>
     </main>
@@ -469,12 +492,12 @@ function Choice({ label, values, value, setValue, visual = false }: { label: str
   return <fieldset className="choice-field"><legend>{label}</legend><div className={visual ? "choice-row visual" : "choice-row"}>{values.map((item) => <button type="button" key={item} className={value === item ? "selected" : ""} onClick={() => setValue(item)}>{visual && <i className={`grass-${item.toLowerCase().replaceAll(" ", "-")}`} />}{item}{item === "Entretenue" && <small>Herbe &lt; 15 cm</small>}</button>)}</div></fieldset>;
 }
 
-function StepDuration({ packageCode, setPackageCode, recommended, priority, taskLabel, warnings, movePriority, waste, setWaste }: { packageCode: PackageCode; setPackageCode: (v: PackageCode) => void; recommended: PackageCode; priority: string[]; taskLabel: (code: string) => string; warnings: string[]; movePriority: (i: number, d: number) => void; waste: string; setWaste: (v: string) => void }) {
+function StepDuration({ packageCode, packages, setPackageCode, recommended, priority, taskLabel, warnings, movePriority, waste, setWaste }: { packageCode: PackageCode; packages: Record<PackageCode, PackageDetails>; setPackageCode: (v: PackageCode) => void; recommended: PackageCode; priority: string[]; taskLabel: (code: string) => string; warnings: string[]; movePriority: (i: number, d: number) => void; waste: string; setWaste: (v: string) => void }) {
   return <>
     <Intro eyebrow="Nos forfaits" title="Choisissez le temps à réserver." copy="Le temps de déplacement jusqu’au chantier est inclus dans le forfait choisi : il ne s’ajoute jamais en supplément." />
-    <div className="recommendation"><span>Recommandation mise à jour</span><strong>{durationLabel(recommended)}</strong><p>{packageDetails[recommended].hours} d’intervention, déplacement inclus · Calculé selon vos réponses</p><i>✓</i></div>
+    <div className="recommendation"><span>Recommandation mise à jour</span><strong>{durationLabel(recommended, packages)}</strong><p>{packages[recommended].hours} d’intervention, déplacement inclus · Calculé selon vos réponses</p><i>✓</i></div>
     {warnings.map((warning) => <p className="pricing-warning" key={warning}>{warning}</p>)}
-    <div className="duration-grid">{(Object.keys(packageDetails) as PackageCode[]).map((code) => { const item = packageDetails[code]; return <button type="button" key={code} className={packageCode === code ? "selected" : ""} onClick={() => setPackageCode(code)}><strong>{item.label}</strong><span>{item.hours} · {item.price} € TTC</span>{code === recommended && <b>Recommandé</b>}{code === "TWO_DAYS" && <small>Économisez 60 € par rapport à deux journées séparées</small>}</button>; })}</div>
+    <div className="duration-grid">{[...packageCodes].sort((left, right) => packages[left].sortOrder - packages[right].sortOrder).map((code) => { const item = packages[code]; const saving = code === "TWO_DAYS" ? Math.max(0, packages.FULL_DAY.price * 2 - item.price) : 0; return <button type="button" key={code} className={packageCode === code ? "selected" : ""} onClick={() => setPackageCode(code)}><strong>{item.label}</strong><span>{item.hours} · {item.price} € TTC</span>{code === recommended && <b>Recommandé</b>}{saving > 0 && <small>Économisez {saving} € par rapport à deux journées séparées</small>}</button>; })}</div>
     <div className="priority-card"><h2>Si nous devons choisir, que faut-il faire en premier ?</h2>{priority.map((item, index) => <div key={item}><span>{index + 1}</span><strong>{taskLabel(item)}</strong><button type="button" onClick={() => movePriority(index, -1)} aria-label={`Remonter ${taskLabel(item)}`}>↑</button><button type="button" onClick={() => movePriority(index, 1)} aria-label={`Descendre ${taskLabel(item)}`}>↓</button></div>)}</div>
     <div className="waste-card"><h2>Que faisons-nous des déchets végétaux ?</h2><div><button type="button" className={waste === "broyer" ? "selected" : ""} onClick={() => setWaste("broyer")}><strong>Broyage des déchets végétaux sur place <em>— Gratuit</em></strong><span><b>Option gratuite</b> · Le broyat reste dans le jardin pour servir de paillage ou d’apport de matière organique.</span></button><button type="button" className={waste === "emporter" ? "selected" : ""} onClick={() => setWaste("emporter")}><strong>Évacuation des déchets végétaux</strong><span>Chargement et évacuation · environ 1–2 m³ · <b>28 € TTC</b></span></button></div></div>
   </>;
@@ -534,7 +557,7 @@ function StepAccess({ access, setAccess, accessType, setAccessType, animal, setA
   </>;
 }
 
-function StepCheckout({ address, setAddress, selected, selectedAvailability, packageCode, waste, totals, legal, setLegal, fullName, setFullName, email, setEmail, phone, setPhone, gardens, gardenId, setGardenId, areaStatus }: { address: string; setAddress: (v: string) => void; selected: string[]; selectedAvailability: AvailabilityOption | null; packageCode: PackageCode; waste: string; totals: { total: number; afterTax: number }; legal: boolean; setLegal: (v: boolean) => void; fullName: string; setFullName: (v: string) => void; email: string; setEmail: (v: string) => void; phone: string; setPhone: (v: string) => void; gardens: GardenOption[]; gardenId: string; setGardenId: (v: string) => void; areaStatus: AreaStatus }) {
+function StepCheckout({ address, setAddress, selected, selectedAvailability, packageCode, packages, waste, totals, legal, setLegal, fullName, setFullName, email, setEmail, phone, setPhone, gardens, gardenId, setGardenId, areaStatus }: { address: string; setAddress: (v: string) => void; selected: string[]; selectedAvailability: AvailabilityOption | null; packageCode: PackageCode; packages: Record<PackageCode, PackageDetails>; waste: string; totals: { total: number; afterTax: number }; legal: boolean; setLegal: (v: boolean) => void; fullName: string; setFullName: (v: string) => void; email: string; setEmail: (v: string) => void; phone: string; setPhone: (v: string) => void; gardens: GardenOption[]; gardenId: string; setGardenId: (v: string) => void; areaStatus: AreaStatus }) {
   const chooseGarden = (id: string) => {
     setGardenId(id);
     const garden = gardens.find((item) => item.id === id);
@@ -545,11 +568,11 @@ function StepCheckout({ address, setAddress, selected, selectedAvailability, pac
     <div className="checkout-card"><h2>Vos coordonnées</h2><div className="form-grid"><label>Nom complet<input required autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Prénom Nom" /></label><label>Email<input required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="vous@exemple.fr" /></label><label>Téléphone mobile<input type="tel" autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="06 00 00 00 00" /></label></div></div>
     <div className="checkout-card address-checkout"><h2>Adresse du jardin</h2><p className="checkout-helper">Indiquez ici le lieu exact de l’intervention. La ville est contrôlée avec notre périmètre réel.</p>{gardens.length > 0 && <label className="saved-garden-picker">Utiliser un jardin enregistré<select value={gardenId} onChange={(event) => chooseGarden(event.target.value)}><option value="">Nouvelle adresse</option>{gardens.map((garden) => <option key={garden.id} value={garden.id}>{garden.label} — {garden.postalCode} {garden.city}</option>)}</select></label>}<AddressFields address={address} setAddress={(value) => { setGardenId(""); setAddress(value); }} areaStatus={areaStatus} /></div>
     <div className="checkout-card"><div className="payment-head"><h2>Validation du devis</h2><span>🔒 Données sécurisées</span></div><div className="no-charge"><strong>Le créneau sera protégé pendant 15 minutes.</strong><p>La validation enregistre le devis et pose un verrou temporaire anti-double-réservation. Vous pourrez ensuite enregistrer votre carte avec Stripe pour confirmer la commande, sans débit immédiat.</p></div></div>
-    <div className="final-summary"><h2>Récapitulatif final</h2><p><strong>{selectedAvailability ? `${selectedAvailability.dateLabel} · ${selectedAvailability.timeLabel}` : "Aucun créneau disponible sélectionné"}</strong><br />{selectedAvailability?.completionLabel}<br />{address}</p><p>{selected.join(" · ")}<br />{durationLabel(packageCode)} · {waste === "broyer" ? "Broyage des déchets végétaux sur place — gratuit" : "Évacuation des déchets végétaux — 28 € TTC"}<br /><small>Le déplacement est inclus dans la durée du forfait.</small></p><strong>Total : {totals.total} € TTC</strong><span>≈ {totals.afterTax} € après crédit d’impôt*</span></div>
+    <div className="final-summary"><h2>Récapitulatif final</h2><p><strong>{selectedAvailability ? `${selectedAvailability.dateLabel} · ${selectedAvailability.timeLabel}` : "Aucun créneau disponible sélectionné"}</strong><br />{selectedAvailability?.completionLabel}<br />{address}</p><p>{selected.join(" · ")}<br />{durationLabel(packageCode, packages)} · {waste === "broyer" ? "Broyage des déchets végétaux sur place — gratuit" : "Évacuation des déchets végétaux — 28 € TTC"}<br /><small>Le déplacement est inclus dans la durée du forfait.</small></p><strong>Total : {totals.total} € TTC</strong><span>≈ {totals.afterTax} € après crédit d’impôt*</span></div>
     <label className="legal-check"><input type="checkbox" checked={legal} onChange={(e) => setLegal(e.target.checked)} /><span>Je confirme l’exactitude des informations et j’accepte l’enregistrement du devis ainsi que le blocage temporaire de ce créneau pendant 15 minutes. Aucun paiement n’est déclenché à cette étape.</span></label>
   </>;
 }
 
-function Summary({ address, selected, taskLabel, lawnSurface, hedgeLength, hedgeHeight, packageCode, waste, totals, pricingLabel }: { address: string; selected: string[]; taskLabel: (code: string) => string; lawnSurface: string; hedgeLength: number; hedgeHeight: string; packageCode: PackageCode; waste: string; totals: TotalData; pricingLabel: string }) {
-  return <aside className="booking-summary"><p className="summary-kicker">Votre intervention</p><h2>Brignoles</h2><small>{address}</small><div className="summary-lines">{selected.map((item) => <div key={item}><span>{taskLabel(item)}</span><strong>{item === "MOWING" ? lawnSurface : item === "HEDGE_TRIMMING" ? `${hedgeLength} m · ${hedgeHeight}` : "Sélectionné"}</strong></div>)}<div><span>Forfait</span><strong>{durationLabel(packageCode)}</strong></div><div><span>Déchets végétaux</span><strong>{waste === "broyer" ? "Broyage sur place · gratuit" : "Évacuation · 28 €"}</strong></div></div><div className="price-lines"><div><span>Intervention</span><strong>{totals.intervention} €</strong></div>{totals.evacuation > 0 && <div><span>Évacuation</span><strong>{totals.evacuation} €</strong></div>}<div><span>Déplacement</span><strong>Inclus dans le forfait</strong></div></div><div className="summary-total"><span>Total TTC</span><strong>{totals.total} €</strong><p>≈ {totals.afterTax} € après crédit d’impôt*</p></div><button type="button">Voir le détail du prix</button><p className="summary-footnote">Prix ferme selon {pricingLabel}. Aucun supplément sans votre accord.</p></aside>;
+function Summary({ address, selected, taskLabel, lawnSurface, hedgeLength, hedgeHeight, packageCode, packages, waste, totals, pricingLabel }: { address: string; selected: string[]; taskLabel: (code: string) => string; lawnSurface: string; hedgeLength: number; hedgeHeight: string; packageCode: PackageCode; packages: Record<PackageCode, PackageDetails>; waste: string; totals: TotalData; pricingLabel: string }) {
+  return <aside className="booking-summary"><p className="summary-kicker">Votre intervention</p><h2>Brignoles</h2><small>{address}</small><div className="summary-lines">{selected.map((item) => <div key={item}><span>{taskLabel(item)}</span><strong>{item === "MOWING" ? lawnSurface : item === "HEDGE_TRIMMING" ? `${hedgeLength} m · ${hedgeHeight}` : "Sélectionné"}</strong></div>)}<div><span>Forfait</span><strong>{durationLabel(packageCode, packages)}</strong></div><div><span>Déchets végétaux</span><strong>{waste === "broyer" ? "Broyage sur place · gratuit" : "Évacuation · 28 €"}</strong></div></div><div className="price-lines"><div><span>Intervention</span><strong>{totals.intervention} €</strong></div>{totals.evacuation > 0 && <div><span>Évacuation</span><strong>{totals.evacuation} €</strong></div>}<div><span>Déplacement</span><strong>Inclus dans le forfait</strong></div></div><div className="summary-total"><span>Total TTC</span><strong>{totals.total} €</strong><p>≈ {totals.afterTax} € après crédit d’impôt*</p></div><button type="button">Voir le détail du prix</button><p className="summary-footnote">Prix ferme selon {pricingLabel}. Aucun supplément sans votre accord.</p></aside>;
 }
