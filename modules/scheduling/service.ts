@@ -3,6 +3,7 @@ import type { AppDatabase, PreparedStatement } from "@/db/database";
 import type { AuthUser } from "@/modules/auth/service";
 import { getQuote, type QuoteView } from "@/modules/quotes/service";
 import { requireServiceArea } from "@/modules/service-area/service";
+import { recommendMissionEquipment } from "@/modules/preparation/equipment";
 import {
   crmSchedulingEnabled,
   createRemoteScheduleHold,
@@ -533,6 +534,12 @@ export async function createScheduleHold(quoteId: string, startsAtValue: unknown
   let remoteReservationCreated = false;
   if (crmSchedulingEnabled()) {
     try {
+      const pricingInput = quote.pricingSnapshot.input;
+      const greenWasteValue = pricingInput && typeof pricingInput === "object"
+        ? (pricingInput as Record<string, unknown>).greenWaste
+        : null;
+      const greenWaste = typeof greenWasteValue === "string" ? greenWasteValue : "";
+      const equipment = recommendMissionEquipment({ tasks: quote.tasks, request: quote.requestSnapshot, greenWaste });
       if (current) await setRemoteScheduleReservationStatus(String(current.id), "released");
       await createRemoteScheduleHold({
         id: holdId,
@@ -544,6 +551,7 @@ export async function createScheduleHold(quoteId: string, startsAtValue: unknown
         customerName: typeof quote.requestSnapshot.fullName === "string" && quote.requestSnapshot.fullName.trim() ? quote.requestSnapshot.fullName.trim() : quote.contactEmail,
         customerEmail: quote.contactEmail,
         title: quote.tasks.map((task) => task.label).join(" · ").slice(0, 160) || "Réservation site internet",
+        equipment,
       });
       remoteReservationCreated = true;
     } catch (error) {

@@ -96,6 +96,7 @@ export type RemoteReservation = {
   customerName: string;
   customerEmail: string;
   title: string;
+  equipment: Array<{ code: string; reason: string; required: boolean }>;
 };
 
 export async function createRemoteScheduleHold(value: RemoteReservation): Promise<void> {
@@ -112,6 +113,7 @@ export async function createRemoteScheduleHold(value: RemoteReservation): Promis
       p_customer_name: value.customerName,
       p_customer_email: value.customerEmail,
       p_title: value.title,
+      p_equipment: value.equipment,
     }),
   });
 }
