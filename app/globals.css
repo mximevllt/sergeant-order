@@ -307,7 +307,7 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .choice-row button small { display: block; margin-top: 4px; color: var(--sage); font-size: 8px; }
 .counter-field { margin-top: 24px; display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 500; }
 .counter-field > div { display: grid; grid-template-columns: 42px 85px 42px; align-items: center; text-align: center; }
-.counter-field button { width: 42px; height: 42px; cursor: pointer; background: white; border: 1px solid rgba(33,46,35,.18); border-radius: 9px; font-size: 18px; }
+.counter-field button { width: 42px; height: 42px; padding: 0; display: grid; place-items: center; cursor: pointer; background: white; border: 1px solid rgba(33,46,35,.18); border-radius: 9px; font-size: 18px; line-height: 1; text-align: center; }
 .upload-card { margin-top: 16px; padding: 29px; color: var(--paper); background: var(--ink); }
 .upload-card > span { color: var(--bronze); font-size: 8px; letter-spacing: .22em; text-transform: uppercase; }
 .upload-card h2 { max-width: 500px; margin: 8px 0 24px; font-size: 27px; line-height: 1.08; }
