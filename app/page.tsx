@@ -4,7 +4,7 @@ import { Footer, Header, SectionLabel } from "./components";
 
 const services = [
   { name: "Tonte & finitions", desc: "Pelouse, bordures et nettoyage après tonte.", image: "/images/tonte-finitions.jpg" },
-  { name: "Taille de haies", desc: "Une coupe nette, régulière et adaptée à vos végétaux.", image: "/images/haies.jpg" },
+  { name: "Taille de haies", desc: "Une coupe nette, régulière et adaptée à vos végétaux.", image: "/images/haies-protege.png" },
   { name: "Débroussaillage", desc: "Herbes hautes, végétation dense et zones difficiles.", image: "/images/debroussaillage-service.png" },
   { name: "Désherbage & massifs", desc: "Des massifs propres, aérés et remis en valeur.", image: "/images/massifs.jpg" },
   { name: "Nettoyage du jardin", desc: "Ramassage, soufflage et remise au propre complète.", image: "/images/nettoyage.jpg" },

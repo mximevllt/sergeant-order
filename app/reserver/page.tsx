@@ -21,7 +21,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 
 const taskPresentation: Record<string, { title: string; image: string }> = {
   MOWING: { title: "Tondre la pelouse", image: "/images/tonte-finitions.jpg" },
-  HEDGE_TRIMMING: { title: "Tailler les haies", image: "/images/haies.jpg" },
+  HEDGE_TRIMMING: { title: "Tailler les haies", image: "/images/haies-protege.png" },
   BRUSH_CLEARING: { title: "Débroussailler", image: "/images/debroussaillage-service.png" },
   FLOWER_BEDS: { title: "Désherber les massifs", image: "/images/massifs.jpg" },
   GARDEN_CLEANING: { title: "Remettre au propre", image: "/images/nettoyage.jpg" },
