@@ -1099,7 +1099,7 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
   .hero h1 { margin-top: 23px; font-size: clamp(46px,12vw,68px); }
   .hero-lead { font-size: 16px; }
   .hero-actions { max-width: none; align-items: stretch; flex-direction: column; gap: 16px; }
-  .hero-actions > .button { width: 100%; min-height: 76px; padding: 18px 22px; gap: 16px; font-size: 10px; line-height: 1.35; letter-spacing: .08em; white-space: nowrap; }
+  .hero-actions > .button { width: 100%; min-height: 76px; padding: 18px 22px; gap: 16px; font-size: 11px; line-height: 1.35; letter-spacing: .08em; white-space: nowrap; }
   .hero-actions > p { margin: 0; text-align: center; }
   .postcode-row { grid-template-columns: 1fr; }
   .form-meta { text-align: left; }
