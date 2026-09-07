@@ -60,7 +60,7 @@ export default function BookingPage() {
   const [hedgeHeight, setHedgeHeight] = useState("1,5–2 m");
   const [hedgeFaces, setHedgeFaces] = useState("3 faces");
   const [packageCode, setPackageCode] = useState<PackageCode>("HALF_DAY");
-  const [waste, setWaste] = useState("laisser");
+  const [waste, setWaste] = useState("broyer");
   const [priority, setPriority] = useState<string[]>(["MOWING", "HEDGE_TRIMMING"]);
   const [scheduleMode, setScheduleMode] = useState("soon");
   const [date, setDate] = useState("");
@@ -106,7 +106,7 @@ export default function BookingPage() {
     hedgeLengthM: hedgeLength,
     hedgeHeightBand: ({ "< 1,5 m": "UNDER_1_5M", "1,5–2 m": "FROM_1_5_TO_2M", "2–2,5 m": "FROM_2_TO_2_5M", "2,5–3 m": "FROM_2_5_TO_3M", "+ 3 m": "OVER_3M" } as Record<string, string>)[hedgeHeight],
     hedgeFaces: ({ Dessus: "TOP", "1 côté": "ONE_SIDE", "2 côtés": "TWO_SIDES", "3 faces": "THREE_FACES" } as Record<string, string>)[hedgeFaces],
-    greenWaste: waste === "broyer" ? "SHRED_ON_SITE" : "LEAVE_ON_SITE",
+    greenWaste: waste === "emporter" ? "REMOVE_1_TO_2M3" : "SHRED_ON_SITE",
   }), [selected, packageCode, lawnSurface, grass, hedgeLength, hedgeHeight, hedgeFaces, waste]);
   const duration = packageDetails[packageCode].halfDays;
   const pricingInputKey = JSON.stringify(pricingInput);
@@ -122,7 +122,7 @@ export default function BookingPage() {
       ["scheduleMode", setScheduleMode], ["date", setDate], ["customDate", setCustomDate], ["slot", setSlot], ["selectedStart", setSelectedStart],
       ["access", setAccess], ["accessType", setAccessType], ["notes", setNotes], ["fullName", setFullName],
     ];
-    for (const [key, setter] of setters) { const value = stringValue(key); if (value !== null) setter(value); }
+    for (const [key, setter] of setters) { const value = stringValue(key); if (value !== null) setter(key === "waste" && value === "laisser" ? "broyer" : value); }
     const restoredSelected = stringList("selected"); if (restoredSelected?.length) setSelected(restoredSelected);
     const restoredPriority = stringList("priority"); if (restoredPriority?.length) setPriority(restoredPriority);
     const restoredPackage = stringValue("packageCode"); if (restoredPackage && restoredPackage in packageDetails) setPackageCode(restoredPackage as PackageCode);
@@ -368,6 +368,12 @@ export default function BookingPage() {
   const taskLabel = (code: string) => tasks.find((task) => task.code === code)?.label ?? code;
   const selectedLabels = selected.map(taskLabel);
   const selectedAvailability = availability.find(({ startsAt }) => startsAt === selectedStart) ?? null;
+  const displayedTotals: TotalData = useMemo(() => {
+    const intervention = packageDetails[packageCode].price;
+    const evacuation = waste === "emporter" ? 28 : 0;
+    const total = intervention + evacuation;
+    return { ...totals, intervention, taskFee: 0, detailFee: 0, accessFee: 0, evacuation, reduction: 0, total, afterTax: Math.ceil(total / 2) };
+  }, [packageCode, totals, waste]);
   const canAdvance = step !== 4 || Boolean(selectedAvailability);
   const canFinish = legal && EMAIL_PATTERN.test(email) && Boolean(fullName.trim()) && areaStatus.state === "eligible" && Boolean(selectedAvailability) && !holding;
 
@@ -386,21 +392,21 @@ export default function BookingPage() {
           {step === 3 && <StepDuration packageCode={packageCode} setPackageCode={setPackageCode} recommended={recommended} priority={priority} taskLabel={taskLabel} warnings={pricingWarnings} movePriority={movePriority} waste={waste} setWaste={setWaste} />}
           {step === 4 && <StepSchedule mode={scheduleMode} setMode={setScheduleMode} date={date} setDate={setDate} customDate={customDate} setCustomDate={setCustomDate} setSlot={setSlot} selectedStart={selectedStart} setSelectedStart={setSelectedStart} options={availability} state={availabilityState} message={availabilityMessage} />}
           {step === 5 && <StepAccess access={access} setAccess={setAccess} accessType={accessType} setAccessType={setAccessType} animal={animal} setAnimal={setAnimal} notes={notes} setNotes={setNotes} />}
-          {step === 6 && <StepCheckout address={address} setAddress={setAddress} selected={selectedLabels} selectedAvailability={selectedAvailability} packageCode={packageCode} waste={waste} totals={totals} legal={legal} setLegal={setLegal} fullName={fullName} setFullName={setFullName} email={email} setEmail={setEmail} phone={phone} setPhone={setPhone} gardens={gardens} gardenId={gardenId} setGardenId={setGardenId} areaStatus={areaStatus} />}
+          {step === 6 && <StepCheckout address={address} setAddress={setAddress} selected={selectedLabels} selectedAvailability={selectedAvailability} packageCode={packageCode} waste={waste} totals={displayedTotals} legal={legal} setLegal={setLegal} fullName={fullName} setFullName={setFullName} email={email} setEmail={setEmail} phone={phone} setPhone={setPhone} gardens={gardens} gardenId={gardenId} setGardenId={setGardenId} areaStatus={areaStatus} />}
 
           {pricingError && <p className="pricing-error" role="alert">Le tarif n’a pas pu être recalculé. Vérifiez votre connexion avant de continuer.</p>}
           {saveState !== "idle" && <p className={`quote-save-state${saveState === "error" ? " error" : ""}`} role={saveState === "error" ? "alert" : "status"}>{saveState === "saving" ? "Enregistrement sécurisé du devis…" : saveState === "saved" ? `Devis ${quoteReference} enregistré automatiquement.` : "Le devis n’a pas pu être enregistré. Vos réponses restent sauvegardées sur cet appareil."}</p>}
 
           <div className="booking-actions">
             {step === 1 ? <Link className="back-button" href="/">← Retour à l’accueil</Link> : <button className="back-button" onClick={goBack}>← Retour</button>}
-            {step < 6 ? <button className={`button button-primary${canAdvance ? "" : " disabled"}`} disabled={!canAdvance} onClick={goNext}>Continuer <span>→</span></button> : <button type="button" className={`button button-primary final-book${canFinish ? "" : " disabled"}`} disabled={!canFinish || saveState === "saving"} onClick={() => void finishQuote()}>{holding ? "Blocage du créneau…" : `Bloquer ce créneau — ${totals.total} € TTC`}</button>}
+            {step < 6 ? <button className={`button button-primary${canAdvance ? "" : " disabled"}`} disabled={!canAdvance} onClick={goNext}>Continuer <span>→</span></button> : <button type="button" className={`button button-primary final-book${canFinish ? "" : " disabled"}`} disabled={!canFinish || saveState === "saving"} onClick={() => void finishQuote()}>{holding ? "Blocage du créneau…" : `Bloquer ce créneau — ${displayedTotals.total} € TTC`}</button>}
           </div>
         </section>
-        <Summary address={address} selected={selected} taskLabel={taskLabel} lawnSurface={lawnSurface} hedgeLength={hedgeLength} hedgeHeight={hedgeHeight} packageCode={packageCode} waste={waste} totals={totals} pricingLabel={pricingLabel} />
+        <Summary address={address} selected={selected} taskLabel={taskLabel} lawnSurface={lawnSurface} hedgeLength={hedgeLength} hedgeHeight={hedgeHeight} packageCode={packageCode} waste={waste} totals={displayedTotals} pricingLabel={pricingLabel} />
       </div>
       <div className="mobile-price-bar">
         {step === 1 ? <Link className="mobile-back" href="/" aria-label="Retour à l’accueil">←</Link> : <button className="mobile-back" onClick={goBack} aria-label="Étape précédente">←</button>}
-        <div><strong>{totals.total} €</strong><small>{durationLabel(packageCode)}</small></div>
+        <div><strong>{displayedTotals.total} €</strong><small>{durationLabel(packageCode)}</small></div>
         {step < 6 ? <button className={canAdvance ? "" : "disabled"} disabled={!canAdvance} onClick={goNext}>Continuer →</button> : <button className={canFinish ? "" : "disabled"} disabled={!canFinish} onClick={() => void finishQuote()}>{holding ? "Blocage…" : "Bloquer"}</button>}
       </div>
     </main>
@@ -454,7 +460,7 @@ function StepDuration({ packageCode, setPackageCode, recommended, priority, task
     {warnings.map((warning) => <p className="pricing-warning" key={warning}>{warning}</p>)}
     <div className="duration-grid">{(Object.keys(packageDetails) as PackageCode[]).map((code) => { const item = packageDetails[code]; return <button type="button" key={code} className={packageCode === code ? "selected" : ""} onClick={() => setPackageCode(code)}><strong>{item.label}</strong><span>{item.hours} · {item.price} € TTC</span>{code === recommended && <b>Recommandé</b>}{code === "TWO_DAYS" && <small>Économisez 60 € par rapport à deux journées séparées</small>}</button>; })}</div>
     <div className="priority-card"><h2>Si nous devons choisir, que faut-il faire en premier ?</h2>{priority.map((item, index) => <div key={item}><span>{index + 1}</span><strong>{taskLabel(item)}</strong><button type="button" onClick={() => movePriority(index, -1)} aria-label={`Remonter ${taskLabel(item)}`}>↑</button><button type="button" onClick={() => movePriority(index, 1)} aria-label={`Descendre ${taskLabel(item)}`}>↓</button></div>)}</div>
-    <div className="waste-card"><h2>Que faisons-nous des déchets végétaux ?</h2><div><button type="button" className={waste === "laisser" ? "selected" : ""} onClick={() => setWaste("laisser")}><strong>Les laisser sur place</strong><span>Par défaut, ils restent sur place et sont regroupés proprement.</span></button><button type="button" className={waste === "broyer" ? "selected" : ""} onClick={() => setWaste("broyer")}><strong>Broyage des déchets végétaux sur place <em>— Gratuit</em></strong><span><b>Option gratuite</b> · Le broyat peut être réutilisé dans le jardin comme paillage ou apport de matière organique.</span></button></div></div>
+    <div className="waste-card"><h2>Que faisons-nous des déchets végétaux ?</h2><div><button type="button" className={waste === "broyer" ? "selected" : ""} onClick={() => setWaste("broyer")}><strong>Broyage des déchets végétaux sur place <em>— Gratuit</em></strong><span><b>Option gratuite</b> · Le broyat reste dans le jardin pour servir de paillage ou d’apport de matière organique.</span></button><button type="button" className={waste === "emporter" ? "selected" : ""} onClick={() => setWaste("emporter")}><strong>Évacuation des déchets végétaux</strong><span>Chargement et évacuation · environ 1–2 m³ · <b>28 € TTC</b></span></button></div></div>
   </>;
 }
 
@@ -523,12 +529,11 @@ function StepCheckout({ address, setAddress, selected, selectedAvailability, pac
     <div className="checkout-card"><h2>Vos coordonnées</h2><div className="form-grid"><label>Nom complet<input required autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Prénom Nom" /></label><label>Email<input required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="vous@exemple.fr" /></label><label>Téléphone mobile<input type="tel" autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="06 00 00 00 00" /></label></div></div>
     <div className="checkout-card address-checkout"><h2>Adresse du jardin</h2><p className="checkout-helper">Indiquez ici le lieu exact de l’intervention. La ville est contrôlée avec notre périmètre réel.</p>{gardens.length > 0 && <label className="saved-garden-picker">Utiliser un jardin enregistré<select value={gardenId} onChange={(event) => chooseGarden(event.target.value)}><option value="">Nouvelle adresse</option>{gardens.map((garden) => <option key={garden.id} value={garden.id}>{garden.label} — {garden.postalCode} {garden.city}</option>)}</select></label>}<AddressFields address={address} setAddress={(value) => { setGardenId(""); setAddress(value); }} areaStatus={areaStatus} /></div>
     <div className="checkout-card"><div className="payment-head"><h2>Validation du devis</h2><span>🔒 Données sécurisées</span></div><div className="no-charge"><strong>Le créneau sera protégé pendant 15 minutes.</strong><p>La validation enregistre le devis et pose un verrou temporaire anti-double-réservation. Vous pourrez ensuite enregistrer votre carte avec Stripe pour confirmer la commande, sans débit immédiat.</p></div></div>
-    <div className="final-summary"><h2>Récapitulatif final</h2><p><strong>{selectedAvailability ? `${selectedAvailability.dateLabel} · ${selectedAvailability.timeLabel}` : "Aucun créneau disponible sélectionné"}</strong><br />{selectedAvailability?.completionLabel}<br />{address}</p><p>{selected.join(" · ")}<br />{durationLabel(packageCode)} · {waste === "broyer" ? "Broyage des déchets végétaux sur place — gratuit" : "Déchets végétaux laissés sur place"}<br /><small>Le déplacement est inclus dans la durée du forfait.</small></p><strong>Total : {totals.total} € TTC</strong><span>≈ {totals.afterTax} € après crédit d’impôt*</span></div>
+    <div className="final-summary"><h2>Récapitulatif final</h2><p><strong>{selectedAvailability ? `${selectedAvailability.dateLabel} · ${selectedAvailability.timeLabel}` : "Aucun créneau disponible sélectionné"}</strong><br />{selectedAvailability?.completionLabel}<br />{address}</p><p>{selected.join(" · ")}<br />{durationLabel(packageCode)} · {waste === "broyer" ? "Broyage des déchets végétaux sur place — gratuit" : "Évacuation des déchets végétaux — 28 € TTC"}<br /><small>Le déplacement est inclus dans la durée du forfait.</small></p><strong>Total : {totals.total} € TTC</strong><span>≈ {totals.afterTax} € après crédit d’impôt*</span></div>
     <label className="legal-check"><input type="checkbox" checked={legal} onChange={(e) => setLegal(e.target.checked)} /><span>Je confirme l’exactitude des informations et j’accepte l’enregistrement du devis ainsi que le blocage temporaire de ce créneau pendant 15 minutes. Aucun paiement n’est déclenché à cette étape.</span></label>
   </>;
 }
 
 function Summary({ address, selected, taskLabel, lawnSurface, hedgeLength, hedgeHeight, packageCode, waste, totals, pricingLabel }: { address: string; selected: string[]; taskLabel: (code: string) => string; lawnSurface: string; hedgeLength: number; hedgeHeight: string; packageCode: PackageCode; waste: string; totals: TotalData; pricingLabel: string }) {
-  const adjustments = totals.taskFee + totals.detailFee + totals.accessFee;
-  return <aside className="booking-summary"><p className="summary-kicker">Votre intervention</p><h2>Brignoles</h2><small>{address}</small><div className="summary-lines">{selected.map((item) => <div key={item}><span>{taskLabel(item)}</span><strong>{item === "MOWING" ? lawnSurface : item === "HEDGE_TRIMMING" ? `${hedgeLength} m · ${hedgeHeight}` : "Sélectionné"}</strong></div>)}<div><span>Forfait</span><strong>{durationLabel(packageCode)}</strong></div><div><span>Déchets végétaux</span><strong>{waste === "broyer" ? "Broyage sur place · gratuit" : "Laissés sur place"}</strong></div></div><div className="price-lines"><div><span>Intervention</span><strong>{totals.intervention} €</strong></div>{adjustments > 0 && <div><span>Ajustements</span><strong>{adjustments} €</strong></div>}<div><span>Déplacement</span><strong>Inclus dans le forfait</strong></div></div><div className="summary-total"><span>Total TTC</span><strong>{totals.total} €</strong><p>≈ {totals.afterTax} € après crédit d’impôt*</p></div><button type="button">Voir le détail du prix</button><p className="summary-footnote">Prix ferme selon {pricingLabel}. Aucun supplément sans votre accord.</p></aside>;
+  return <aside className="booking-summary"><p className="summary-kicker">Votre intervention</p><h2>Brignoles</h2><small>{address}</small><div className="summary-lines">{selected.map((item) => <div key={item}><span>{taskLabel(item)}</span><strong>{item === "MOWING" ? lawnSurface : item === "HEDGE_TRIMMING" ? `${hedgeLength} m · ${hedgeHeight}` : "Sélectionné"}</strong></div>)}<div><span>Forfait</span><strong>{durationLabel(packageCode)}</strong></div><div><span>Déchets végétaux</span><strong>{waste === "broyer" ? "Broyage sur place · gratuit" : "Évacuation · 28 €"}</strong></div></div><div className="price-lines"><div><span>Intervention</span><strong>{totals.intervention} €</strong></div>{totals.evacuation > 0 && <div><span>Évacuation</span><strong>{totals.evacuation} €</strong></div>}<div><span>Déplacement</span><strong>Inclus dans le forfait</strong></div></div><div className="summary-total"><span>Total TTC</span><strong>{totals.total} €</strong><p>≈ {totals.afterTax} € après crédit d’impôt*</p></div><button type="button">Voir le détail du prix</button><p className="summary-footnote">Prix ferme selon {pricingLabel}. Aucun supplément sans votre accord.</p></aside>;
 }

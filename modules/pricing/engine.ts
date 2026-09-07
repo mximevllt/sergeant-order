@@ -20,6 +20,12 @@ export type PricingRule = {
 
 export type PriceLine = { code: string; label: string; category: "intervention" | "tasks" | "details" | "access" | "waste" | "discount"; amountTtcCents: number };
 
+const packagePricesTtcCents = { TWO_HOURS: 35000, HALF_DAY: 52000, FULL_DAY: 98000, TWO_DAYS: 190000 } as const;
+
+export function packagePriceTtcCents(packageCode: PricingInput["packageCode"]): number {
+  return packagePricesTtcCents[packageCode];
+}
+
 const surfaceHours: Record<string, number> = { UNDER_100: .8, FROM_100_TO_250: 1.3, FROM_250_TO_500: 2.1, FROM_500_TO_1000: 3.6, OVER_1000: 5.2 };
 const hedgeFactor: Record<string, number> = { UNDER_1_5M: .8, FROM_1_5_TO_2M: 1, FROM_2_TO_2_5M: 1.25, FROM_2_5_TO_3M: 1.55, OVER_3M: 2.1 };
 const otherTaskHours: Record<string, number> = { BRUSH_CLEARING: 2.4, FLOWER_BEDS: 1.6, GARDEN_CLEANING: 1.4, COMPLETE_MAINTENANCE: 3.8 };
@@ -82,6 +88,7 @@ function calculateAmount(rule: PricingRule, input: PricingInput, context: Record
 
 function categoryFor(code: string): PriceLine["category"] {
   if (code === "PACKAGE") return "intervention";
+  if (code === "GREEN_WASTE_1_TO_2M3") return "waste";
   if (code === "ADDITIONAL_TASK") return "tasks";
   if (["GRASS_HIGH", "GRASS_VERY_HIGH", "HEDGE_LENGTH_OVER_5M", "HEDGE_FACES", "HEDGE_HEIGHT"].includes(code)) return "details";
   return "details";
