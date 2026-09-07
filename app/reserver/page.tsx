@@ -22,10 +22,10 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 const taskPresentation: Record<string, { title: string; image: string }> = {
   MOWING: { title: "Tondre la pelouse", image: "/images/tonte-finitions.jpg" },
   HEDGE_TRIMMING: { title: "Tailler les haies", image: "/images/haies.jpg" },
-  BRUSH_CLEARING: { title: "Débroussailler", image: "/images/debroussaillage.jpg" },
+  BRUSH_CLEARING: { title: "Débroussailler", image: "/images/debroussaillage-service.png" },
   FLOWER_BEDS: { title: "Désherber les massifs", image: "/images/massifs.jpg" },
   GARDEN_CLEANING: { title: "Remettre au propre", image: "/images/nettoyage.jpg" },
-  COMPLETE_MAINTENANCE: { title: "Entretenir tout le jardin", image: "/images/entretien.jpg" },
+  COMPLETE_MAINTENANCE: { title: "Entretenir tout le jardin", image: "/images/entretien-complet.png" },
 };
 
 const emptyTotals: TotalData = { intervention: 0, taskFee: 0, detailFee: 0, accessFee: 0, evacuation: 0, reduction: 0, total: 0, afterTax: 0 };
@@ -433,7 +433,7 @@ function StepNeeds({ tasks, catalogError, selected, toggleTask, unknownNeed, set
     <Intro eyebrow="Votre besoin" title="Que souhaitez-vous faire ?" copy="Vous pouvez sélectionner plusieurs tâches pour la même intervention." />
     {catalogError && <p className="pricing-error" role="alert">Le catalogue des prestations est momentanément indisponible.</p>}
     {!tasks.length && !catalogError && <p className="catalog-loading" role="status">Chargement des prestations disponibles…</p>}
-    <div className="task-grid">{tasks.map((task) => { const presentation = taskPresentation[task.code] ?? { title: task.label, image: "/images/entretien.jpg" }; return <button type="button" key={task.code} className={selected.includes(task.code) ? "task-card selected" : "task-card"} onClick={() => toggleTask(task.code)} aria-pressed={selected.includes(task.code)}><Image src={presentation.image} alt="" width={1000} height={668} sizes="(max-width: 600px) 110px, 150px" /><div><small>{task.label}</small><strong>{presentation.title}</strong><span>{task.description}</span></div><i>{selected.includes(task.code) ? "✓" : "+"}</i></button>; })}</div>
+    <div className="task-grid">{tasks.map((task) => { const presentation = taskPresentation[task.code] ?? { title: task.label, image: "/images/entretien-complet.png" }; return <button type="button" key={task.code} className={selected.includes(task.code) ? "task-card selected" : "task-card"} onClick={() => toggleTask(task.code)} aria-pressed={selected.includes(task.code)}><Image src={presentation.image} alt="" width={1000} height={668} sizes="(max-width: 600px) 110px, 150px" /><div><small>{task.label}</small><strong>{presentation.title}</strong><span>{task.description}</span></div><i>{selected.includes(task.code) ? "✓" : "+"}</i></button>; })}</div>
     <button type="button" className={`unknown-link${unknownNeed ? " selected" : ""}`} onClick={openUnknown} aria-expanded={unknownNeed}>Je ne sais pas exactement ce qu’il faut {unknownNeed ? "↑" : "→"}</button>
     {unknownNeed && <div className="unknown-panel"><h2>Montrez-nous simplement le jardin.</h2><p>Décrivez ce que vous observez et ajoutez quelques photos. L’équipe préparera la mission à partir de ces éléments.</p><label htmlFor="unknown-description">Ce qu’il faudrait améliorer<textarea id="unknown-description" value={unknownDescription} onChange={(event) => setUnknownDescription(event.target.value)} placeholder="Exemple : le jardin n’a pas été entretenu depuis plusieurs mois, je souhaite surtout qu’il soit remis au propre…" /></label><label className="unknown-upload"><input type="file" multiple accept="image/*" />+ Ajouter des photos</label></div>}
   </>;

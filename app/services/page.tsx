@@ -5,10 +5,10 @@ import { Footer, Header, SectionLabel } from "../components";
 const services = [
   ["Tonte & finitions", "Pelouse, bordures et finitions nettes.", "/images/tonte-finitions.jpg", "/reserver?service=tonte"],
   ["Taille de haies", "Entretien courant, dessus et côtés.", "/images/haies.jpg", "/services/taille-haies"],
-  ["Débroussaillage", "Zones denses, herbes hautes et ronces.", "/images/debroussaillage.jpg", "/reserver?service=debroussaillage"],
+  ["Débroussaillage", "Zones denses, herbes hautes et ronces.", "/images/debroussaillage-service.png", "/reserver?service=debroussaillage"],
   ["Désherbage & massifs", "Massifs, graviers, pavés et potager.", "/images/massifs.jpg", "/reserver?service=massifs"],
   ["Nettoyage du jardin", "Feuilles, ramassage et remise au propre.", "/images/nettoyage.jpg", "/reserver?service=nettoyage"],
-  ["Entretien complet", "Plusieurs travaux, dans l’ordre de vos priorités.", "/images/entretien.jpg", "/reserver?service=complet"],
+  ["Entretien complet", "Plusieurs travaux, dans l’ordre de vos priorités.", "/images/entretien-complet.png", "/reserver?service=complet"],
 ];
 
 export default function ServicesPage() {
