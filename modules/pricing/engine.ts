@@ -1,5 +1,6 @@
 export type PricingInput = {
   taskCodes: string[];
+  packageCode: "TWO_HOURS" | "HALF_DAY" | "FULL_DAY" | "TWO_DAYS";
   halfDays: number;
   lawnSurfaceBand: string;
   grassState: string;
@@ -7,11 +8,6 @@ export type PricingInput = {
   hedgeHeightBand: string;
   hedgeFaces: string;
   greenWaste: string;
-  customerPresence: boolean;
-  accessType: string;
-  nearbyParking: boolean;
-  vehicleDistanceBand: string;
-  flexibleOnDay: boolean;
 };
 
 export type PricingRule = {
@@ -28,20 +24,22 @@ const surfaceHours: Record<string, number> = { UNDER_100: .8, FROM_100_TO_250: 1
 const hedgeFactor: Record<string, number> = { UNDER_1_5M: .8, FROM_1_5_TO_2M: 1, FROM_2_TO_2_5M: 1.25, FROM_2_5_TO_3M: 1.55, OVER_3M: 2.1 };
 const otherTaskHours: Record<string, number> = { BRUSH_CLEARING: 2.4, FLOWER_BEDS: 1.6, GARDEN_CLEANING: 1.4, COMPLETE_MAINTENANCE: 3.8 };
 
-export function recommendedHalfDays(input: PricingInput): number {
+export function recommendedPackage(input: PricingInput): PricingInput["packageCode"] {
   let hours = 0;
   if (input.taskCodes.includes("MOWING")) hours += surfaceHours[input.lawnSurfaceBand] ?? 1.3;
   if (input.taskCodes.includes("HEDGE_TRIMMING")) hours += 2.4 * (hedgeFactor[input.hedgeHeightBand] ?? 1);
   for (const task of input.taskCodes) hours += otherTaskHours[task] ?? 0;
-  return Math.max(1, Math.ceil(hours / 4));
+  if (hours <= 2) return "TWO_HOURS";
+  if (hours <= 4) return "HALF_DAY";
+  if (hours <= 8) return "FULL_DAY";
+  return "TWO_DAYS";
 }
 
 export function calculatePrice(input: PricingInput, rules: PricingRule[]): PriceLine[] {
   const context: Record<string, unknown> = {
     taskCodes: input.taskCodes, taskCount: input.taskCodes.length, grassState: input.grassState,
     lengthM: input.hedgeLengthM, faces: input.hedgeFaces, heightBand: input.hedgeHeightBand,
-    greenWaste: input.greenWaste, customerPresence: input.customerPresence, accessType: input.accessType,
-    nearbyParking: input.nearbyParking, vehicleDistanceBand: input.vehicleDistanceBand, flexibleOnDay: input.flexibleOnDay,
+    greenWaste: input.greenWaste, packageCode: input.packageCode,
   };
   const lines: PriceLine[] = [];
   for (const rule of rules) {
@@ -83,10 +81,8 @@ function calculateAmount(rule: PricingRule, input: PricingInput, context: Record
 }
 
 function categoryFor(code: string): PriceLine["category"] {
-  if (code === "BASE_HALF_DAY") return "intervention";
+  if (code === "PACKAGE") return "intervention";
   if (code === "ADDITIONAL_TASK") return "tasks";
   if (["GRASS_HIGH", "GRASS_VERY_HIGH", "HEDGE_LENGTH_OVER_5M", "HEDGE_FACES", "HEDGE_HEIGHT"].includes(code)) return "details";
-  if (code === "GREEN_WASTE_1_TO_2M3") return "waste";
-  if (code === "FLEXIBLE_DAY") return "discount";
-  return "access";
+  return "details";
 }

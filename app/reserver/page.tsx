@@ -6,7 +6,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 type CatalogTask = { code: string; label: string; description: string; measurementKind: string; eligibleSap: boolean; sortOrder: number };
 type TotalData = { intervention: number; taskFee: number; detailFee: number; accessFee: number; evacuation: number; reduction: number; total: number; afterTax: number };
-type PricingResponse = { recommendedHalfDays: number; warnings: string[]; totals: TotalData; pricingVersion: { version: number; label: string } };
+type PackageCode = "TWO_HOURS" | "HALF_DAY" | "FULL_DAY" | "TWO_DAYS";
+type PricingResponse = { recommendedPackage: PackageCode; warnings: string[]; totals: TotalData; pricingVersion: { version: number; label: string } };
 type SavedQuote = { id: string; publicReference: string; status: string; contactEmail: string; contactPhone: string | null; gardenId: string | null; requestSnapshot: Record<string, unknown>; updatedAt: string };
 type GardenOption = { id: string; label: string; line1: string; line2: string | null; postalCode: string; city: string };
 type SaveState = "idle" | "saving" | "saved" | "error";
@@ -29,16 +30,14 @@ const taskPresentation: Record<string, { title: string; image: string }> = {
 
 const emptyTotals: TotalData = { intervention: 0, taskFee: 0, detailFee: 0, accessFee: 0, evacuation: 0, reduction: 0, total: 0, afterTax: 0 };
 
-function durationLabel(blocks: number) {
-  if (blocks === 1) return "1/2 journée";
-  if (blocks === 2) return "1 journée";
-  const days = blocks / 2;
-  return `${Number.isInteger(days) ? days : String(days).replace(".", ",")} jours`;
-}
+const packageDetails: Record<PackageCode, { label: string; hours: string; halfDays: number; price: number }> = {
+  TWO_HOURS: { label: "Forfait 2 heures", hours: "2 h", halfDays: 1, price: 350 },
+  HALF_DAY: { label: "Demi-journée", hours: "4 h", halfDays: 1, price: 520 },
+  FULL_DAY: { label: "Journée complète", hours: "8 h", halfDays: 2, price: 980 },
+  TWO_DAYS: { label: "Deux journées", hours: "16 h", halfDays: 4, price: 1900 },
+};
 
-function longDurationLabel(blocks: number) {
-  return blocks === 1 ? "1 demi-journée" : durationLabel(blocks);
-}
+function durationLabel(packageCode: PackageCode) { return packageDetails[packageCode].label; }
 
 function serviceAreaParts(address: string): { postalCode: string; city: string } | null {
   const matches = [...address.matchAll(/\b(\d{5})\s+([^,]+)/gu)];
@@ -60,8 +59,8 @@ export default function BookingPage() {
   const [hedgeLength, setHedgeLength] = useState(18);
   const [hedgeHeight, setHedgeHeight] = useState("1,5–2 m");
   const [hedgeFaces, setHedgeFaces] = useState("3 faces");
-  const [duration, setDuration] = useState(2);
-  const [waste, setWaste] = useState("emporter");
+  const [packageCode, setPackageCode] = useState<PackageCode>("HALF_DAY");
+  const [waste, setWaste] = useState("laisser");
   const [priority, setPriority] = useState<string[]>(["MOWING", "HEDGE_TRIMMING"]);
   const [scheduleMode, setScheduleMode] = useState("soon");
   const [date, setDate] = useState("");
@@ -73,12 +72,8 @@ export default function BookingPage() {
   const [availabilityMessage, setAvailabilityMessage] = useState("");
   const [availabilityRefresh, setAvailabilityRefresh] = useState(0);
   const [holding, setHolding] = useState(false);
-  const [flexible, setFlexible] = useState(false);
   const [access, setAccess] = useState("Je serai sur place");
   const [accessType, setAccessType] = useState("Code");
-  const [parking, setParking] = useState("Oui");
-  const [distance, setDistance] = useState("< 20 m");
-  const [passageWidth, setPassageWidth] = useState("> 1 m");
   const [animal, setAnimal] = useState(false);
   const [notes, setNotes] = useState("");
   const [fullName, setFullName] = useState("");
@@ -89,7 +84,7 @@ export default function BookingPage() {
   const [areaStatus, setAreaStatus] = useState<AreaStatus>({ state: "checking", message: "Vérification de la zone…" });
   const [legal, setLegal] = useState(false);
   const [totals, setTotals] = useState<TotalData>(emptyTotals);
-  const [recommended, setRecommended] = useState(2);
+  const [recommended, setRecommended] = useState<PackageCode>("HALF_DAY");
   const [pricingWarnings, setPricingWarnings] = useState<string[]>([]);
   const [pricingLabel, setPricingLabel] = useState("Chargement du barème…");
   const [pricingError, setPricingError] = useState(false);
@@ -105,19 +100,15 @@ export default function BookingPage() {
   const saveChain = useRef<Promise<SavedQuote | null>>(Promise.resolve(null));
 
   const pricingInput = useMemo(() => ({
-    taskCodes: selected, halfDays: duration,
+    taskCodes: selected, packageCode,
     lawnSurfaceBand: ({ "< 100 m²": "UNDER_100", "100–250 m²": "FROM_100_TO_250", "250–500 m²": "FROM_250_TO_500", "500–1 000 m²": "FROM_500_TO_1000", "+ 1 000 m²": "OVER_1000" } as Record<string, string>)[lawnSurface],
     grassState: ({ Entretenue: "MAINTAINED", Haute: "HIGH", "Très haute": "VERY_HIGH" } as Record<string, string>)[grass],
     hedgeLengthM: hedgeLength,
     hedgeHeightBand: ({ "< 1,5 m": "UNDER_1_5M", "1,5–2 m": "FROM_1_5_TO_2M", "2–2,5 m": "FROM_2_TO_2_5M", "2,5–3 m": "FROM_2_5_TO_3M", "+ 3 m": "OVER_3M" } as Record<string, string>)[hedgeHeight],
     hedgeFaces: ({ Dessus: "TOP", "1 côté": "ONE_SIDE", "2 côtés": "TWO_SIDES", "3 faces": "THREE_FACES" } as Record<string, string>)[hedgeFaces],
-    greenWaste: waste === "emporter" ? "REMOVE_1_TO_2M3" : "LEAVE_ON_SITE",
-    customerPresence: !access.includes("sans moi"),
-    accessType: ({ "Portail ouvert": "OPEN_GATE", "Boîte à clés": "KEY_BOX", Code: "CODE", Autre: "OTHER" } as Record<string, string>)[accessType],
-    nearbyParking: parking === "Oui",
-    vehicleDistanceBand: ({ "< 20 m": "UNDER_20M", "20–50 m": "FROM_20_TO_50M", "> 50 m": "OVER_50M" } as Record<string, string>)[distance],
-    flexibleOnDay: flexible,
-  }), [selected, duration, lawnSurface, grass, hedgeLength, hedgeHeight, hedgeFaces, waste, access, accessType, parking, distance, flexible]);
+    greenWaste: waste === "broyer" ? "SHRED_ON_SITE" : "LEAVE_ON_SITE",
+  }), [selected, packageCode, lawnSurface, grass, hedgeLength, hedgeHeight, hedgeFaces, waste]);
+  const duration = packageDetails[packageCode].halfDays;
   const pricingInputKey = JSON.stringify(pricingInput);
   const availabilityInputKey = JSON.stringify({ address, taskCodes: selected, halfDays: duration });
 
@@ -129,17 +120,15 @@ export default function BookingPage() {
       ["address", setAddress], ["unknownDescription", setUnknownDescription], ["lawnSurface", setLawnSurface], ["grass", setGrass],
       ["terrain", setTerrain], ["hedgeHeight", setHedgeHeight], ["hedgeFaces", setHedgeFaces], ["waste", setWaste],
       ["scheduleMode", setScheduleMode], ["date", setDate], ["customDate", setCustomDate], ["slot", setSlot], ["selectedStart", setSelectedStart],
-      ["access", setAccess], ["accessType", setAccessType], ["parking", setParking], ["distance", setDistance],
-      ["passageWidth", setPassageWidth], ["notes", setNotes], ["fullName", setFullName],
+      ["access", setAccess], ["accessType", setAccessType], ["notes", setNotes], ["fullName", setFullName],
     ];
     for (const [key, setter] of setters) { const value = stringValue(key); if (value !== null) setter(value); }
     const restoredSelected = stringList("selected"); if (restoredSelected?.length) setSelected(restoredSelected);
     const restoredPriority = stringList("priority"); if (restoredPriority?.length) setPriority(restoredPriority);
-    const restoredDuration = numberValue("duration"); if (restoredDuration) setDuration(restoredDuration);
+    const restoredPackage = stringValue("packageCode"); if (restoredPackage && restoredPackage in packageDetails) setPackageCode(restoredPackage as PackageCode);
     const restoredLength = numberValue("hedgeLength"); if (restoredLength) setHedgeLength(restoredLength);
     const restoredStep = numberValue("step"); if (restoredStep) setStep(Math.min(6, Math.max(1, restoredStep)));
     if (typeof snapshot.unknownNeed === "boolean") setUnknownNeed(snapshot.unknownNeed);
-    if (typeof snapshot.flexible === "boolean") setFlexible(snapshot.flexible);
     if (typeof snapshot.animal === "boolean") setAnimal(snapshot.animal);
   }
 
@@ -203,7 +192,7 @@ export default function BookingPage() {
     return () => controller.abort();
   }, []);
 
-  const recommendationKey = JSON.stringify([selected, lawnSurface, grass, hedgeLength, hedgeHeight, hedgeFaces, waste, access, accessType, parking, distance, flexible]);
+  const recommendationKey = JSON.stringify([selected, lawnSurface, grass, hedgeLength, hedgeHeight, hedgeFaces, waste]);
   useEffect(() => {
     if (!tasks.length) return;
     const controller = new AbortController();
@@ -211,15 +200,15 @@ export default function BookingPage() {
       fetch("/api/pricing/estimate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(pricingInput), signal: controller.signal }).then(async (response) => {
         if (!response.ok) throw new Error("PRICING_UNAVAILABLE");
         const quote = await response.json() as PricingResponse;
-        setTotals(quote.totals); setRecommended(quote.recommendedHalfDays); setPricingWarnings(quote.warnings); setPricingLabel(quote.pricingVersion.label); setPricingError(false); setPricedInputKey(pricingInputKey);
+        setTotals(quote.totals); setRecommended(quote.recommendedPackage); setPricingWarnings(quote.warnings); setPricingLabel(quote.pricingVersion.label); setPricingError(false); setPricedInputKey(pricingInputKey);
         if (lastRecommendationKey.current !== recommendationKey) {
           lastRecommendationKey.current = recommendationKey;
-          if (duration !== quote.recommendedHalfDays) setDuration(quote.recommendedHalfDays);
+          if (packageCode !== quote.recommendedPackage) setPackageCode(quote.recommendedPackage);
         }
       }).catch((error) => { if (error instanceof Error && error.name !== "AbortError") setPricingError(true); });
     }, 180);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [tasks.length, recommendationKey, duration, pricingInput, pricingInputKey]);
+  }, [tasks.length, recommendationKey, packageCode, pricingInput, pricingInputKey]);
 
   useEffect(() => {
     const parts = serviceAreaParts(address);
@@ -287,9 +276,9 @@ export default function BookingPage() {
 
   const draftSnapshot = useMemo(() => ({
     schemaVersion: 1, clientRevision, step, address, selected, priority, unknownNeed, unknownDescription,
-    lawnSurface, grass, terrain, hedgeLength, hedgeHeight, hedgeFaces, duration, waste, scheduleMode, date, customDate,
-    slot, selectedStart, flexible, access, accessType, parking, distance, passageWidth, animal, notes, fullName,
-  }), [clientRevision, step, address, selected, priority, unknownNeed, unknownDescription, lawnSurface, grass, terrain, hedgeLength, hedgeHeight, hedgeFaces, duration, waste, scheduleMode, date, customDate, slot, selectedStart, flexible, access, accessType, parking, distance, passageWidth, animal, notes, fullName]);
+    lawnSurface, grass, terrain, hedgeLength, hedgeHeight, hedgeFaces, duration, packageCode, waste, scheduleMode, date, customDate,
+    slot, selectedStart, access, accessType, animal, notes, fullName,
+  }), [clientRevision, step, address, selected, priority, unknownNeed, unknownDescription, lawnSurface, grass, terrain, hedgeLength, hedgeHeight, hedgeFaces, duration, packageCode, waste, scheduleMode, date, customDate, slot, selectedStart, access, accessType, animal, notes, fullName]);
   const quotePayload = useMemo(() => ({ contact: { fullName, email, phone }, gardenId: gardenId || null, request: draftSnapshot, pricing: pricingInput }), [fullName, email, phone, gardenId, draftSnapshot, pricingInput]);
   const quotePayloadKey = JSON.stringify(quotePayload);
 
@@ -394,10 +383,10 @@ export default function BookingPage() {
         <section className="booking-main" key={step}>
           {step === 1 && <StepNeeds tasks={tasks} catalogError={catalogError} selected={selected} toggleTask={toggleTask} unknownNeed={unknownNeed} setUnknownNeed={setUnknownNeed} unknownDescription={unknownDescription} setUnknownDescription={setUnknownDescription} />}
           {step === 2 && <StepDetails selected={selected} lawnSurface={lawnSurface} setLawnSurface={updateLawnSurface} grass={grass} setGrass={setGrass} terrain={terrain} setTerrain={setTerrain} hedgeLength={hedgeLength} setHedgeLength={setHedgeLength} hedgeHeight={hedgeHeight} setHedgeHeight={updateHedgeHeight} hedgeFaces={hedgeFaces} setHedgeFaces={setHedgeFaces} />}
-          {step === 3 && <StepDuration duration={duration} setDuration={setDuration} recommended={recommended} priority={priority} taskLabel={taskLabel} warnings={pricingWarnings} movePriority={movePriority} waste={waste} setWaste={setWaste} />}
-          {step === 4 && <StepSchedule mode={scheduleMode} setMode={setScheduleMode} date={date} setDate={setDate} customDate={customDate} setCustomDate={setCustomDate} setSlot={setSlot} selectedStart={selectedStart} setSelectedStart={setSelectedStart} options={availability} state={availabilityState} message={availabilityMessage} flexible={flexible} setFlexible={setFlexible} />}
-          {step === 5 && <StepAccess access={access} setAccess={setAccess} accessType={accessType} setAccessType={setAccessType} parking={parking} setParking={setParking} distance={distance} setDistance={setDistance} passageWidth={passageWidth} setPassageWidth={setPassageWidth} animal={animal} setAnimal={setAnimal} notes={notes} setNotes={setNotes} />}
-          {step === 6 && <StepCheckout address={address} setAddress={setAddress} selected={selectedLabels} selectedAvailability={selectedAvailability} duration={duration} waste={waste} totals={totals} legal={legal} setLegal={setLegal} fullName={fullName} setFullName={setFullName} email={email} setEmail={setEmail} phone={phone} setPhone={setPhone} gardens={gardens} gardenId={gardenId} setGardenId={setGardenId} areaStatus={areaStatus} />}
+          {step === 3 && <StepDuration packageCode={packageCode} setPackageCode={setPackageCode} recommended={recommended} priority={priority} taskLabel={taskLabel} warnings={pricingWarnings} movePriority={movePriority} waste={waste} setWaste={setWaste} />}
+          {step === 4 && <StepSchedule mode={scheduleMode} setMode={setScheduleMode} date={date} setDate={setDate} customDate={customDate} setCustomDate={setCustomDate} setSlot={setSlot} selectedStart={selectedStart} setSelectedStart={setSelectedStart} options={availability} state={availabilityState} message={availabilityMessage} />}
+          {step === 5 && <StepAccess access={access} setAccess={setAccess} accessType={accessType} setAccessType={setAccessType} animal={animal} setAnimal={setAnimal} notes={notes} setNotes={setNotes} />}
+          {step === 6 && <StepCheckout address={address} setAddress={setAddress} selected={selectedLabels} selectedAvailability={selectedAvailability} packageCode={packageCode} waste={waste} totals={totals} legal={legal} setLegal={setLegal} fullName={fullName} setFullName={setFullName} email={email} setEmail={setEmail} phone={phone} setPhone={setPhone} gardens={gardens} gardenId={gardenId} setGardenId={setGardenId} areaStatus={areaStatus} />}
 
           {pricingError && <p className="pricing-error" role="alert">Le tarif n’a pas pu être recalculé. Vérifiez votre connexion avant de continuer.</p>}
           {saveState !== "idle" && <p className={`quote-save-state${saveState === "error" ? " error" : ""}`} role={saveState === "error" ? "alert" : "status"}>{saveState === "saving" ? "Enregistrement sécurisé du devis…" : saveState === "saved" ? `Devis ${quoteReference} enregistré automatiquement.` : "Le devis n’a pas pu être enregistré. Vos réponses restent sauvegardées sur cet appareil."}</p>}
@@ -407,11 +396,11 @@ export default function BookingPage() {
             {step < 6 ? <button className={`button button-primary${canAdvance ? "" : " disabled"}`} disabled={!canAdvance} onClick={goNext}>Continuer <span>→</span></button> : <button type="button" className={`button button-primary final-book${canFinish ? "" : " disabled"}`} disabled={!canFinish || saveState === "saving"} onClick={() => void finishQuote()}>{holding ? "Blocage du créneau…" : `Bloquer ce créneau — ${totals.total} € TTC`}</button>}
           </div>
         </section>
-        <Summary address={address} selected={selected} taskLabel={taskLabel} lawnSurface={lawnSurface} hedgeLength={hedgeLength} hedgeHeight={hedgeHeight} duration={duration} waste={waste} totals={totals} pricingLabel={pricingLabel} />
+        <Summary address={address} selected={selected} taskLabel={taskLabel} lawnSurface={lawnSurface} hedgeLength={hedgeLength} hedgeHeight={hedgeHeight} packageCode={packageCode} waste={waste} totals={totals} pricingLabel={pricingLabel} />
       </div>
       <div className="mobile-price-bar">
         {step === 1 ? <Link className="mobile-back" href="/" aria-label="Retour à l’accueil">←</Link> : <button className="mobile-back" onClick={goBack} aria-label="Étape précédente">←</button>}
-        <div><strong>{totals.total} €</strong><small>{durationLabel(duration)}</small></div>
+        <div><strong>{totals.total} €</strong><small>{durationLabel(packageCode)}</small></div>
         {step < 6 ? <button className={canAdvance ? "" : "disabled"} disabled={!canAdvance} onClick={goNext}>Continuer →</button> : <button className={canFinish ? "" : "disabled"} disabled={!canFinish} onClick={() => void finishQuote()}>{holding ? "Blocage…" : "Bloquer"}</button>}
       </div>
     </main>
@@ -458,23 +447,19 @@ function Choice({ label, values, value, setValue, visual = false }: { label: str
   return <fieldset className="choice-field"><legend>{label}</legend><div className={visual ? "choice-row visual" : "choice-row"}>{values.map((item) => <button type="button" key={item} className={value === item ? "selected" : ""} onClick={() => setValue(item)}>{visual && <i className={`grass-${item.toLowerCase().replaceAll(" ", "-")}`} />}{item}{item === "Entretenue" && <small>Herbe &lt; 15 cm</small>}</button>)}</div></fieldset>;
 }
 
-function StepDuration({ duration, setDuration, recommended, priority, taskLabel, warnings, movePriority, waste, setWaste }: { duration: number; setDuration: (v: number) => void; recommended: number; priority: string[]; taskLabel: (code: string) => string; warnings: string[]; movePriority: (i: number, d: number) => void; waste: string; setWaste: (v: string) => void }) {
-  const [showMore, setShowMore] = useState(duration > 4 || recommended > 4);
-  const fixed = [[1, "1/2 journée", "4 h"], [2, "1 journée", "8 h"], [3, "1,5 jour", "12 h"], [4, "2 jours", "16 h"]] as const;
-  const customSelected = duration > 4;
+function StepDuration({ packageCode, setPackageCode, recommended, priority, taskLabel, warnings, movePriority, waste, setWaste }: { packageCode: PackageCode; setPackageCode: (v: PackageCode) => void; recommended: PackageCode; priority: string[]; taskLabel: (code: string) => string; warnings: string[]; movePriority: (i: number, d: number) => void; waste: string; setWaste: (v: string) => void }) {
   return <>
-    <Intro eyebrow="Notre estimation" title="Combien de temps réserver ?" copy="Le site recommande la durée la plus adaptée aux informations renseignées." />
-    <div className="recommendation"><span>Recommandation mise à jour</span><strong>{longDurationLabel(recommended)}</strong><p>Environ {recommended * 4} h d’intervention · Calculé selon vos réponses</p><i>✓</i></div>
+    <Intro eyebrow="Nos forfaits" title="Choisissez le temps à réserver." copy="Le temps de déplacement jusqu’au chantier est inclus dans le forfait choisi : il ne s’ajoute jamais en supplément." />
+    <div className="recommendation"><span>Recommandation mise à jour</span><strong>{durationLabel(recommended)}</strong><p>{packageDetails[recommended].hours} d’intervention, déplacement inclus · Calculé selon vos réponses</p><i>✓</i></div>
     {warnings.map((warning) => <p className="pricing-warning" key={warning}>{warning}</p>)}
-    <div className="duration-grid">{fixed.map(([value, label, hours]) => <button type="button" key={value} className={duration === value ? "selected" : ""} onClick={() => setDuration(value)}><strong>{label}</strong><span>{hours}</span>{value === recommended && <b>Recommandé</b>}</button>)}<button type="button" className={`duration-more${customSelected ? " selected" : ""}`} onClick={() => { setShowMore(true); if (duration <= 4) setDuration(Math.max(5, recommended)); }} aria-expanded={showMore}><strong>+</strong><span>Plus de jours</span>{recommended > 4 && <b>Recommandé</b>}</button></div>
-    {showMore && <div className="custom-duration"><label htmlFor="custom-duration">Durée en jours</label><div><button type="button" onClick={() => setDuration(Math.max(5, duration - 1))} aria-label="Retirer une demi-journée">−</button><input id="custom-duration" type="number" min="2.5" step="0.5" value={Math.max(2.5, duration / 2)} onChange={(e) => setDuration(Math.max(5, Math.round(Number(e.target.value) * 2)))} /><span>jours</span><button type="button" onClick={() => setDuration(Math.max(5, duration + 1))} aria-label="Ajouter une demi-journée">+</button></div><small>Les flèches ajustent la durée par pas de 0,5 jour.</small></div>}
+    <div className="duration-grid">{(Object.keys(packageDetails) as PackageCode[]).map((code) => { const item = packageDetails[code]; return <button type="button" key={code} className={packageCode === code ? "selected" : ""} onClick={() => setPackageCode(code)}><strong>{item.label}</strong><span>{item.hours} · {item.price} € TTC</span>{code === recommended && <b>Recommandé</b>}{code === "TWO_DAYS" && <small>Économisez 60 € par rapport à deux journées séparées</small>}</button>; })}</div>
     <div className="priority-card"><h2>Si nous devons choisir, que faut-il faire en premier ?</h2>{priority.map((item, index) => <div key={item}><span>{index + 1}</span><strong>{taskLabel(item)}</strong><button type="button" onClick={() => movePriority(index, -1)} aria-label={`Remonter ${taskLabel(item)}`}>↑</button><button type="button" onClick={() => movePriority(index, 1)} aria-label={`Descendre ${taskLabel(item)}`}>↓</button></div>)}</div>
-    <div className="waste-card"><h2>Que faisons-nous des déchets verts ?</h2><div><button type="button" className={waste === "laisser" ? "selected" : ""} onClick={() => setWaste("laisser")}><strong>Les laisser sur place</strong><span>Regroupés proprement à l’endroit de votre choix.</span></button><button type="button" className={waste === "emporter" ? "selected" : ""} onClick={() => setWaste("emporter")}><strong>Les emporter</strong><span>Chargement et évacuation · environ 1–2 m³.</span></button></div></div>
+    <div className="waste-card"><h2>Que faisons-nous des déchets végétaux ?</h2><div><button type="button" className={waste === "laisser" ? "selected" : ""} onClick={() => setWaste("laisser")}><strong>Les laisser sur place</strong><span>Par défaut, ils restent sur place et sont regroupés proprement.</span></button><button type="button" className={waste === "broyer" ? "selected" : ""} onClick={() => setWaste("broyer")}><strong>Broyage des déchets végétaux sur place <em>— Gratuit</em></strong><span><b>Option gratuite</b> · Le broyat peut être réutilisé dans le jardin comme paillage ou apport de matière organique.</span></button></div></div>
   </>;
 }
 
-type ScheduleProps = { mode: string; setMode: (v: string) => void; date: string; setDate: (v: string) => void; customDate: string; setCustomDate: (v: string) => void; setSlot: (v: string) => void; selectedStart: string; setSelectedStart: (v: string) => void; options: AvailabilityOption[]; state: AvailabilityState; message: string; flexible: boolean; setFlexible: (v: boolean) => void };
-function StepSchedule({ mode, setMode, date, setDate, customDate, setCustomDate, setSlot, selectedStart, setSelectedStart, options, state, message, flexible, setFlexible }: ScheduleProps) {
+type ScheduleProps = { mode: string; setMode: (v: string) => void; date: string; setDate: (v: string) => void; customDate: string; setCustomDate: (v: string) => void; setSlot: (v: string) => void; selectedStart: string; setSelectedStart: (v: string) => void; options: AvailabilityOption[]; state: AvailabilityState; message: string };
+function StepSchedule({ mode, setMode, date, setDate, customDate, setCustomDate, setSlot, selectedStart, setSelectedStart, options, state, message }: ScheduleProps) {
   const allDates = [...new Set(options.map(({ localDate }) => localDate))];
   const visibleDates = mode === "soon" ? allDates.slice(0, 5) : allDates.slice(0, 7);
   const dayOptions = options.filter(({ localDate }) => localDate === date);
@@ -512,24 +497,22 @@ function StepSchedule({ mode, setMode, date, setDate, customDate, setCustomDate,
     <div className="slot-grid">{dayOptions.map((option) => <button type="button" key={`${option.startsAt}-${option.endsAt}`} className={selectedStart === option.startsAt ? "selected" : ""} onClick={() => selectOption(option)}><strong>{option.timeLabel}</strong><span>{option.period === "MORNING" ? "Matin" : "Après-midi"} · {option.availableTeams} équipe{option.availableTeams > 1 ? "s" : ""} disponible{option.availableTeams > 1 ? "s" : ""}</span><small>{option.completionLabel}</small></button>)}</div>
     {date && !dayOptions.length && state === "ready" && <p className="availability-status error">Aucune équipe n’est disponible à cette date pour toute la durée demandée.</p>}
     {selectedOption && <div className="hold-notice"><strong>Ce créneau est disponible maintenant.</strong><p>Il sera bloqué pendant 15 minutes lorsque vous validerez la dernière étape, le temps de poursuivre vers le paiement.</p></div>}
-    <label className="flexible-toggle"><span><strong>Je suis flexible sur la journée</strong><small>Nous choisissons matin ou après-midi et confirmons au plus tard 48 h avant.</small></span><b>−10 €</b><input type="checkbox" checked={flexible} onChange={(e) => setFlexible(e.target.checked)} /><i /></label>
     <div className="weather-note"><span>☁</span><div><strong>Et s’il pleut ?</strong><p>Si les conditions rendent l’intervention impossible ou inefficace, vous pourrez choisir gratuitement un nouveau créneau.</p></div></div>
   </>;
 }
 
-type AccessProps = { access: string; setAccess: (v: string) => void; accessType: string; setAccessType: (v: string) => void; parking: string; setParking: (v: string) => void; distance: string; setDistance: (v: string) => void; passageWidth: string; setPassageWidth: (v: string) => void; animal: boolean; setAnimal: (v: boolean) => void; notes: string; setNotes: (v: string) => void };
-function StepAccess({ access, setAccess, accessType, setAccessType, parking, setParking, distance, setDistance, passageWidth, setPassageWidth, animal, setAnimal, notes, setNotes }: AccessProps) {
+type AccessProps = { access: string; setAccess: (v: string) => void; accessType: string; setAccessType: (v: string) => void; animal: boolean; setAnimal: (v: boolean) => void; notes: string; setNotes: (v: string) => void };
+function StepAccess({ access, setAccess, accessType, setAccessType, animal, setAnimal, notes, setNotes }: AccessProps) {
   return <>
-    <Intro eyebrow="Sur place" title="Comment accéder au jardin ?" copy="Chaque contrainte logistique affine légèrement le prix, sauf les animaux et la largeur du passage." />
+    <Intro eyebrow="Sur place" title="Comment accéder au jardin ?" copy="Indiquez-nous simplement comment l’équipe pourra entrer le jour de l’intervention." />
     <div className="access-grid">{["Je serai sur place", "Le jardin est accessible sans moi"].map((item) => <button type="button" key={item} className={access === item ? "selected" : ""} onClick={() => setAccess(item)}><span>{item.startsWith("Je") ? "◎" : "⌂"}</span><strong>{item}</strong><i>{access === item ? "✓" : "+"}</i></button>)}</div>
     {access.includes("sans moi") && <div className="detail-card"><h2>Type d’accès</h2><Choice label="Choisissez une option" values={["Portail ouvert", "Boîte à clés", "Code", "Autre"]} value={accessType} setValue={setAccessType} />{accessType === "Code" && <div className="field-group compact"><label htmlFor="gate">Code du portail</label><input id="gate" type="password" autoComplete="off" placeholder="Votre code" /><label className="remember"><input type="checkbox" /> Conserver ces instructions pour mes prochaines interventions</label></div>}</div>}
-    <div className="detail-card"><h2>Accès du matériel</h2><Choice label="Un utilitaire peut-il stationner à proximité ?" values={["Oui", "Non"]} value={parking} setValue={setParking} /><Choice label="Distance jusqu’au jardin" values={["< 20 m", "20–50 m", "> 50 m"]} value={distance} setValue={setDistance} /><Choice label="Largeur du passage le plus étroit" values={["> 1 m", "80 cm–1 m", "< 80 cm", "Je ne sais pas"]} value={passageWidth} setValue={setPassageWidth} /></div>
     <div className="animal-line"><span>Y a-t-il un chien ou un autre animal sur la propriété ?</span><button type="button" className={!animal ? "selected" : ""} onClick={() => setAnimal(false)}>Non</button><button type="button" className={animal ? "selected" : ""} onClick={() => setAnimal(true)}>Oui</button></div>
     <div className="field-group"><label htmlFor="notes">Une information utile à ajouter ? <span>Facultatif</span></label><textarea id="notes" maxLength={500} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Exemple : sonnette en panne, portail à pousser fort, attention au système d’arrosage près de la haie…" /></div>
   </>;
 }
 
-function StepCheckout({ address, setAddress, selected, selectedAvailability, duration, waste, totals, legal, setLegal, fullName, setFullName, email, setEmail, phone, setPhone, gardens, gardenId, setGardenId, areaStatus }: { address: string; setAddress: (v: string) => void; selected: string[]; selectedAvailability: AvailabilityOption | null; duration: number; waste: string; totals: { total: number; afterTax: number }; legal: boolean; setLegal: (v: boolean) => void; fullName: string; setFullName: (v: string) => void; email: string; setEmail: (v: string) => void; phone: string; setPhone: (v: string) => void; gardens: GardenOption[]; gardenId: string; setGardenId: (v: string) => void; areaStatus: AreaStatus }) {
+function StepCheckout({ address, setAddress, selected, selectedAvailability, packageCode, waste, totals, legal, setLegal, fullName, setFullName, email, setEmail, phone, setPhone, gardens, gardenId, setGardenId, areaStatus }: { address: string; setAddress: (v: string) => void; selected: string[]; selectedAvailability: AvailabilityOption | null; packageCode: PackageCode; waste: string; totals: { total: number; afterTax: number }; legal: boolean; setLegal: (v: boolean) => void; fullName: string; setFullName: (v: string) => void; email: string; setEmail: (v: string) => void; phone: string; setPhone: (v: string) => void; gardens: GardenOption[]; gardenId: string; setGardenId: (v: string) => void; areaStatus: AreaStatus }) {
   const chooseGarden = (id: string) => {
     setGardenId(id);
     const garden = gardens.find((item) => item.id === id);
@@ -540,12 +523,12 @@ function StepCheckout({ address, setAddress, selected, selectedAvailability, dur
     <div className="checkout-card"><h2>Vos coordonnées</h2><div className="form-grid"><label>Nom complet<input required autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Prénom Nom" /></label><label>Email<input required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="vous@exemple.fr" /></label><label>Téléphone mobile<input type="tel" autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="06 00 00 00 00" /></label></div></div>
     <div className="checkout-card address-checkout"><h2>Adresse du jardin</h2><p className="checkout-helper">Indiquez ici le lieu exact de l’intervention. La ville est contrôlée avec notre périmètre réel.</p>{gardens.length > 0 && <label className="saved-garden-picker">Utiliser un jardin enregistré<select value={gardenId} onChange={(event) => chooseGarden(event.target.value)}><option value="">Nouvelle adresse</option>{gardens.map((garden) => <option key={garden.id} value={garden.id}>{garden.label} — {garden.postalCode} {garden.city}</option>)}</select></label>}<AddressFields address={address} setAddress={(value) => { setGardenId(""); setAddress(value); }} areaStatus={areaStatus} /></div>
     <div className="checkout-card"><div className="payment-head"><h2>Validation du devis</h2><span>🔒 Données sécurisées</span></div><div className="no-charge"><strong>Le créneau sera protégé pendant 15 minutes.</strong><p>La validation enregistre le devis et pose un verrou temporaire anti-double-réservation. Vous pourrez ensuite enregistrer votre carte avec Stripe pour confirmer la commande, sans débit immédiat.</p></div></div>
-    <div className="final-summary"><h2>Récapitulatif final</h2><p><strong>{selectedAvailability ? `${selectedAvailability.dateLabel} · ${selectedAvailability.timeLabel}` : "Aucun créneau disponible sélectionné"}</strong><br />{selectedAvailability?.completionLabel}<br />{address}</p><p>{selected.join(" · ")}<br />{longDurationLabel(duration)} · {waste === "emporter" ? "Évacuation des déchets" : "Déchets laissés sur place"}</p><strong>Total : {totals.total} € TTC</strong><span>≈ {totals.afterTax} € après crédit d’impôt*</span></div>
+    <div className="final-summary"><h2>Récapitulatif final</h2><p><strong>{selectedAvailability ? `${selectedAvailability.dateLabel} · ${selectedAvailability.timeLabel}` : "Aucun créneau disponible sélectionné"}</strong><br />{selectedAvailability?.completionLabel}<br />{address}</p><p>{selected.join(" · ")}<br />{durationLabel(packageCode)} · {waste === "broyer" ? "Broyage des déchets végétaux sur place — gratuit" : "Déchets végétaux laissés sur place"}<br /><small>Le déplacement est inclus dans la durée du forfait.</small></p><strong>Total : {totals.total} € TTC</strong><span>≈ {totals.afterTax} € après crédit d’impôt*</span></div>
     <label className="legal-check"><input type="checkbox" checked={legal} onChange={(e) => setLegal(e.target.checked)} /><span>Je confirme l’exactitude des informations et j’accepte l’enregistrement du devis ainsi que le blocage temporaire de ce créneau pendant 15 minutes. Aucun paiement n’est déclenché à cette étape.</span></label>
   </>;
 }
 
-function Summary({ address, selected, taskLabel, lawnSurface, hedgeLength, hedgeHeight, duration, waste, totals, pricingLabel }: { address: string; selected: string[]; taskLabel: (code: string) => string; lawnSurface: string; hedgeLength: number; hedgeHeight: string; duration: number; waste: string; totals: TotalData; pricingLabel: string }) {
+function Summary({ address, selected, taskLabel, lawnSurface, hedgeLength, hedgeHeight, packageCode, waste, totals, pricingLabel }: { address: string; selected: string[]; taskLabel: (code: string) => string; lawnSurface: string; hedgeLength: number; hedgeHeight: string; packageCode: PackageCode; waste: string; totals: TotalData; pricingLabel: string }) {
   const adjustments = totals.taskFee + totals.detailFee + totals.accessFee;
-  return <aside className="booking-summary"><p className="summary-kicker">Votre intervention</p><h2>Brignoles</h2><small>{address}</small><div className="summary-lines">{selected.map((item) => <div key={item}><span>{taskLabel(item)}</span><strong>{item === "MOWING" ? lawnSurface : item === "HEDGE_TRIMMING" ? `${hedgeLength} m · ${hedgeHeight}` : "Sélectionné"}</strong></div>)}<div><span>Durée</span><strong>{longDurationLabel(duration)}</strong></div><div><span>Déchets</span><strong>{waste === "emporter" ? "Évacuation" : "Laissés sur place"}</strong></div></div><div className="price-lines"><div><span>Intervention</span><strong>{totals.intervention} €</strong></div>{adjustments > 0 && <div><span>Ajustements</span><strong>{adjustments} €</strong></div>}{totals.evacuation > 0 && <div><span>Évacuation</span><strong>{totals.evacuation} €</strong></div>}{totals.reduction > 0 && <div><span>Flexibilité</span><strong>−{totals.reduction} €</strong></div>}<div><span>Déplacement</span><strong>Inclus</strong></div></div><div className="summary-total"><span>Total TTC</span><strong>{totals.total} €</strong><p>≈ {totals.afterTax} € après crédit d’impôt*</p></div><button type="button">Voir le détail du prix</button><p className="summary-footnote">Prix ferme selon {pricingLabel}. Aucun supplément sans votre accord.</p></aside>;
+  return <aside className="booking-summary"><p className="summary-kicker">Votre intervention</p><h2>Brignoles</h2><small>{address}</small><div className="summary-lines">{selected.map((item) => <div key={item}><span>{taskLabel(item)}</span><strong>{item === "MOWING" ? lawnSurface : item === "HEDGE_TRIMMING" ? `${hedgeLength} m · ${hedgeHeight}` : "Sélectionné"}</strong></div>)}<div><span>Forfait</span><strong>{durationLabel(packageCode)}</strong></div><div><span>Déchets végétaux</span><strong>{waste === "broyer" ? "Broyage sur place · gratuit" : "Laissés sur place"}</strong></div></div><div className="price-lines"><div><span>Intervention</span><strong>{totals.intervention} €</strong></div>{adjustments > 0 && <div><span>Ajustements</span><strong>{adjustments} €</strong></div>}<div><span>Déplacement</span><strong>Inclus dans le forfait</strong></div></div><div className="summary-total"><span>Total TTC</span><strong>{totals.total} €</strong><p>≈ {totals.afterTax} € après crédit d’impôt*</p></div><button type="button">Voir le détail du prix</button><p className="summary-footnote">Prix ferme selon {pricingLabel}. Aucun supplément sans votre accord.</p></aside>;
 }

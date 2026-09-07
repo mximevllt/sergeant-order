@@ -88,8 +88,8 @@ async function resolveGarden(database: AppDatabase, quote: QuoteView, user: Auth
     statements: [
       database.prepare(`INSERT INTO addresses (id, owner_user_id, kind, label, line1, postal_code, city, department_code, country_code) VALUES (?, ?, 'SERVICE', 'Adresse de la réservation', ?, ?, ?, ?, 'FR')`)
         .bind(addressId, user.id, parsed.line1, parsed.postalCode, parsed.city, parsed.postalCode.slice(0, 2)),
-      database.prepare(`INSERT INTO gardens (id, owner_user_id, address_id, label, surface_m2, terrain_slope, access_width_cm, has_animals, parking_notes, public_notes) VALUES (?, ?, ?, 'Jardin principal', ?, 'UNKNOWN', ?, ?, ?, ?)`)
-        .bind(gardenId, user.id, addressId, surfaceBands[String(pricingInput.lawnSurfaceBand)] ?? null, Number.parseInt(String(snapshot.passageWidth), 10) || null, snapshot.animal === true ? 1 : 0, String(snapshot.parking ?? "") || null, String(snapshot.notes ?? "") || null),
+      database.prepare(`INSERT INTO gardens (id, owner_user_id, address_id, label, surface_m2, terrain_slope, has_animals, public_notes) VALUES (?, ?, ?, 'Jardin principal', ?, 'UNKNOWN', ?, ?)`)
+        .bind(gardenId, user.id, addressId, surfaceBands[String(pricingInput.lawnSurfaceBand)] ?? null, snapshot.animal === true ? 1 : 0, String(snapshot.notes ?? "") || null),
     ],
   };
 }

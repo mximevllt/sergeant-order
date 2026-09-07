@@ -267,12 +267,13 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .recommendation strong { display: block; margin: 7px 0 3px; font-family: var(--display); font-size: 28px; }
 .recommendation p { color: rgba(246,244,235,.62); font-size: 11px; }
 .recommendation i { position: absolute; top: 27px; right: 27px; width: 38px; height: 38px; display: grid; place-items: center; color: var(--ink); background: var(--paper); border-radius: 50%; font-style: normal; }
-.duration-grid { margin-top: 10px; display: grid; grid-template-columns: repeat(5,1fr); gap: 8px; }
-.duration-grid button { position: relative; min-height: 110px; padding: 18px 12px; text-align: left; overflow: hidden; cursor: pointer; background: var(--paper); border: 1px solid rgba(33,46,35,.14); border-radius: 11px; }
+.duration-grid { margin-top: 10px; display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; }
+.duration-grid button { position: relative; min-height: 132px; padding: 18px 12px; text-align: left; overflow: hidden; cursor: pointer; background: var(--paper); border: 1px solid rgba(33,46,35,.14); border-radius: 11px; }
 .duration-grid button.selected { border-color: var(--bronze); box-shadow: inset 0 0 0 1px var(--bronze); }
 .duration-grid strong, .duration-grid span { display: block; }
 .duration-grid strong { font-family: var(--display); font-size: 19px; }
 .duration-grid span { margin-top: 5px; color: var(--sage); font-size: 10px; }
+.duration-grid button small { display: block; margin-top: 8px; color: var(--bronze); font-size: 8px; line-height: 1.35; }
 .duration-grid b { position: absolute; bottom: 0; left: 0; right: 0; padding: 6px; color: var(--paper); background: var(--bronze); border-radius: 0 0 10px 10px; font-size: 7px; font-weight: 400; letter-spacing: .14em; text-transform: uppercase; }
 .duration-grid .duration-more { text-align: center; }
 .duration-grid .duration-more strong { font-size: 32px; line-height: .8; }
@@ -456,6 +457,10 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .pricing-principles article span { color: var(--bronze); font-size: 9px; }
 .pricing-principles h2 { margin: 40px 0 17px; font-size: 30px; }
 .pricing-principles p { color: var(--sage); font-size: 13px; line-height: 1.7; }
+.pricing-principles p strong { color: var(--ink); font-family: var(--display); font-size: 25px; font-weight: 500; }
+.pricing-principles .pricing-saving { color: var(--paper); background: var(--ink); border-color: var(--ink); }
+.pricing-principles .pricing-saving p, .pricing-principles .pricing-saving p strong { color: var(--paper); }
+.pricing-principles .pricing-saving p b { color: var(--bronze); }
 .pricing-calc { position: sticky; top: 100px; padding: 30px; color: var(--paper); background: var(--ink); }
 .pricing-calc > span { color: var(--bronze); font-size: 8px; letter-spacing: .22em; text-transform: uppercase; }
 .pricing-calc h2 { margin: 8px 0 27px; font-size: 34px; }
