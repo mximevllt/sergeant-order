@@ -27,13 +27,25 @@ export function packagePriceTtcCents(packageCode: PricingInput["packageCode"]): 
 }
 
 const surfaceHours: Record<string, number> = { UNDER_100: .8, FROM_100_TO_250: 1.3, FROM_250_TO_500: 2.1, FROM_500_TO_1000: 3.6, OVER_1000: 5.2 };
-const hedgeFactor: Record<string, number> = { UNDER_1_5M: .8, FROM_1_5_TO_2M: 1, FROM_2_TO_2_5M: 1.25, FROM_2_5_TO_3M: 1.55, OVER_3M: 2.1 };
+// La taille de haies dépend d'abord du métrage et du nombre de faces : une très
+// petite haie haute ne doit pas basculer seule sur une journée complète.
+const hedgeHoursPerMetre: Record<string, number> = {
+  UNDER_1_5M: .025,
+  FROM_1_5_TO_2M: .035,
+  FROM_2_TO_2_5M: .047,
+  FROM_2_5_TO_3M: .06,
+};
+const hedgeFaceCount: Record<string, number> = { TOP: 1, ONE_SIDE: 1, TWO_SIDES: 2, THREE_FACES: 3 };
 const otherTaskHours: Record<string, number> = { BRUSH_CLEARING: 2.4, FLOWER_BEDS: 1.6, GARDEN_CLEANING: 1.4, COMPLETE_MAINTENANCE: 3.8 };
 
 export function recommendedPackage(input: PricingInput): PricingInput["packageCode"] {
   let hours = 0;
   if (input.taskCodes.includes("MOWING")) hours += surfaceHours[input.lawnSurfaceBand] ?? 1.3;
-  if (input.taskCodes.includes("HEDGE_TRIMMING")) hours += 2.4 * (hedgeFactor[input.hedgeHeightBand] ?? 1);
+  if (input.taskCodes.includes("HEDGE_TRIMMING")) {
+    const perMetre = hedgeHoursPerMetre[input.hedgeHeightBand] ?? hedgeHoursPerMetre.FROM_1_5_TO_2M;
+    const faces = hedgeFaceCount[input.hedgeFaces] ?? 1;
+    hours += .35 + input.hedgeLengthM * perMetre * faces;
+  }
   for (const task of input.taskCodes) hours += otherTaskHours[task] ?? 0;
   if (hours <= 2) return "TWO_HOURS";
   if (hours <= 4) return "HALF_DAY";

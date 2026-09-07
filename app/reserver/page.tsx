@@ -120,7 +120,7 @@ export default function BookingPage() {
     lawnSurfaceBand: ({ "< 100 m²": "UNDER_100", "100–250 m²": "FROM_100_TO_250", "250–500 m²": "FROM_250_TO_500", "500–1 000 m²": "FROM_500_TO_1000", "+ 1 000 m²": "OVER_1000" } as Record<string, string>)[lawnSurface],
     grassState: ({ Entretenue: "MAINTAINED", Haute: "HIGH", "Très haute": "VERY_HIGH" } as Record<string, string>)[grass],
     hedgeLengthM: hedgeLength,
-    hedgeHeightBand: ({ "< 1,5 m": "UNDER_1_5M", "1,5–2 m": "FROM_1_5_TO_2M", "2–2,5 m": "FROM_2_TO_2_5M", "2,5–3 m": "FROM_2_5_TO_3M", "+ 3 m": "OVER_3M" } as Record<string, string>)[hedgeHeight],
+    hedgeHeightBand: ({ "< 1,5 m": "UNDER_1_5M", "1,5–2 m": "FROM_1_5_TO_2M", "2–2,5 m": "FROM_2_TO_2_5M", "2,5–3 m": "FROM_2_5_TO_3M" } as Record<string, string>)[hedgeHeight],
     hedgeFaces: ({ Dessus: "TOP", "1 côté": "ONE_SIDE", "2 côtés": "TWO_SIDES", "3 faces": "THREE_FACES" } as Record<string, string>)[hedgeFaces],
     greenWaste: waste === "emporter" ? "REMOVE_1_TO_2M3" : "SHRED_ON_SITE",
   }), [selected, packageCode, lawnSurface, grass, hedgeLength, hedgeHeight, hedgeFaces, waste]);
@@ -138,7 +138,7 @@ export default function BookingPage() {
       ["scheduleMode", setScheduleMode], ["date", setDate], ["customDate", setCustomDate], ["slot", setSlot], ["selectedStart", setSelectedStart],
       ["access", setAccess], ["accessType", setAccessType], ["notes", setNotes], ["fullName", setFullName],
     ];
-    for (const [key, setter] of setters) { const value = stringValue(key); if (value !== null) setter(key === "waste" && value === "laisser" ? "broyer" : value); }
+    for (const [key, setter] of setters) { const value = stringValue(key); if (value !== null) setter(key === "waste" && value === "laisser" ? "broyer" : key === "hedgeHeight" && value === "+ 3 m" ? "2,5–3 m" : value); }
     const restoredSelected = stringList("selected"); if (restoredSelected?.length) setSelected(restoredSelected);
     const restoredPriority = stringList("priority"); if (restoredPriority?.length) setPriority(restoredPriority);
     const restoredPackage = stringValue("packageCode"); if (restoredPackage && restoredPackage in packageDetails) setPackageCode(restoredPackage as PackageCode);
@@ -460,7 +460,7 @@ function StepDetails({ selected, lawnSurface, setLawnSurface, grass, setGrass, t
   return <>
     <Intro eyebrow="Les détails" title="Aidez-nous à prévoir juste." copy="Ces informations affinent la durée recommandée, le matériel nécessaire et le prix." />
     {selected.includes("MOWING") && <div className="detail-card"><h2>Pelouse</h2><Choice label="Quelle surface à entretenir environ ?" values={["< 100 m²", "100–250 m²", "250–500 m²", "500–1 000 m²", "+ 1 000 m²"]} value={lawnSurface} setValue={setLawnSurface} /><Choice label="État actuel" values={["Entretenue", "Haute", "Très haute"]} value={grass} setValue={setGrass} visual /><Choice label="Inclinaison du terrain" values={["Plat", "Légèrement en pente", "Forte pente"]} value={terrain} setValue={setTerrain} /></div>}
-    {selected.includes("HEDGE_TRIMMING") && <div className="detail-card"><h2>Haies</h2><div className="counter-field"><span>Longueur totale</span><div><button type="button" onClick={() => setHedgeLength(Math.max(1, hedgeLength - 1))}>−</button><strong>{hedgeLength} m</strong><button type="button" onClick={() => setHedgeLength(hedgeLength + 1)}>+</button></div></div><Choice label="Hauteur" values={["< 1,5 m", "1,5–2 m", "2–2,5 m", "2,5–3 m", "+ 3 m"]} value={hedgeHeight} setValue={setHedgeHeight} /><Choice label="Que faut-il tailler ?" values={["Dessus", "1 côté", "2 côtés", "3 faces"]} value={hedgeFaces} setValue={setHedgeFaces} /></div>}
+    {selected.includes("HEDGE_TRIMMING") && <div className="detail-card"><h2>Haies</h2><div className="counter-field"><span>Longueur totale</span><div><button type="button" onClick={() => setHedgeLength(Math.max(1, hedgeLength - 1))}>−</button><strong>{hedgeLength} m</strong><button type="button" onClick={() => setHedgeLength(hedgeLength + 1)}>+</button></div></div><Choice label="Hauteur" values={["< 1,5 m", "1,5–2 m", "2–2,5 m", "2,5–3 m"]} value={hedgeHeight} setValue={setHedgeHeight} /><Choice label="Que faut-il tailler ?" values={["Dessus", "1 côté", "2 côtés", "3 faces"]} value={hedgeFaces} setValue={setHedgeFaces} /></div>}
     <div className="upload-card"><span>Photos</span><h2>Quelques photos peuvent nous éviter de vous appeler.</h2><label><input type="file" multiple accept="image/*" />+ Ajouter des photos</label><p>Prenez une vue d’ensemble et, si besoin, une photo rapprochée. Maximum 8 photos. Évitez si possible d’inclure des personnes.</p></div>
   </>;
 }

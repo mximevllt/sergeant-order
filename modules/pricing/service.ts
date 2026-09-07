@@ -17,7 +17,7 @@ export type Estimate = {
 const enumValues = {
   lawnSurfaceBand: ["UNDER_100", "FROM_100_TO_250", "FROM_250_TO_500", "FROM_500_TO_1000", "OVER_1000"],
   grassState: ["MAINTAINED", "HIGH", "VERY_HIGH"],
-  hedgeHeightBand: ["UNDER_1_5M", "FROM_1_5_TO_2M", "FROM_2_TO_2_5M", "FROM_2_5_TO_3M", "OVER_3M"],
+  hedgeHeightBand: ["UNDER_1_5M", "FROM_1_5_TO_2M", "FROM_2_TO_2_5M", "FROM_2_5_TO_3M"],
   hedgeFaces: ["TOP", "ONE_SIDE", "TWO_SIDES", "THREE_FACES"],
   greenWaste: ["SHRED_ON_SITE", "REMOVE_1_TO_2M3"],
   packageCode: ["TWO_HOURS", "HALF_DAY", "FULL_DAY", "TWO_DAYS"],
@@ -68,7 +68,6 @@ export async function estimatePrice(value: unknown): Promise<Estimate> {
   const cents = (category: string) => lines.filter((line) => line.category === category).reduce((sum, line) => sum + line.amountTtcCents, 0);
   const totalCents = lines.reduce((sum, line) => sum + line.amountTtcCents, 0);
   const warnings: string[] = [];
-  if (taskCodes.includes("HEDGE_TRIMMING") && input.hedgeHeightBand === "OVER_3M") warnings.push("Une haie de plus de 3 m nécessite une vérification de sécurité et de matériel avant confirmation.");
   return {
     pricingVersion: { id: String(version.id), version: Number(version.version), label: String(version.label), currency: String(version.currency), vatRateBasisPoints: Number(version.vatRateBasisPoints) },
     recommendedHalfDays: packageHalfDays[recommended], recommendedPackage: recommended, warnings, lines,
