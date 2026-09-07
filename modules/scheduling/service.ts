@@ -3,6 +3,14 @@ import type { AppDatabase, PreparedStatement } from "@/db/database";
 import type { AuthUser } from "@/modules/auth/service";
 import { getQuote, type QuoteView } from "@/modules/quotes/service";
 import { requireServiceArea } from "@/modules/service-area/service";
+import {
+  crmSchedulingEnabled,
+  createRemoteScheduleHold,
+  getCrmPlanningSnapshot,
+  setRemoteScheduleReservationStatus,
+  CrmSchedulingConflictError,
+  type CrmPlanningSnapshot,
+} from "@/modules/scheduling/crm-supabase";
 
 const COMPANY_TIMEZONE = "Europe/Paris";
 const HOLD_TTL_MS = 15 * 60 * 1000;
@@ -128,6 +136,42 @@ function overlaps(period: WorkPeriod, range: BusyRange): boolean {
   return period.startsAt < range.endsAt && period.endsAt > range.startsAt;
 }
 
+function crmBusyRanges(snapshot: CrmPlanningSnapshot, teamIds: string[]): BusyRange[] {
+  const activeTeams = new Set(teamIds);
+  const busy: BusyRange[] = [];
+  for (const intervention of snapshot.interventions) {
+    if (!intervention.team_id || !activeTeams.has(intervention.team_id) || !intervention.start_time) continue;
+    const startsAt = zonedDateTime(intervention.scheduled_date, intervention.start_time).toISOString();
+    const endsAt = zonedDateTime(intervention.scheduled_date, intervention.end_time || "17:00").toISOString();
+    if (endsAt > startsAt) busy.push({ teamId: intervention.team_id, startsAt, endsAt });
+  }
+  for (const absence of snapshot.absences) {
+    const affected = absence.team_id ? [absence.team_id] : teamIds;
+    const endDate = absence.ends_on || absence.starts_on;
+    for (const teamId of affected) {
+      if (!activeTeams.has(teamId)) continue;
+      busy.push({
+        teamId,
+        startsAt: zonedDateTime(absence.starts_on, "00:00").toISOString(),
+        endsAt: zonedDateTime(addLocalDays(endDate, 1), "00:00").toISOString(),
+      });
+    }
+  }
+  for (const reservation of snapshot.siteReservations) {
+    if (activeTeams.has(reservation.team_id)) busy.push({ teamId: reservation.team_id, startsAt: reservation.starts_at, endsAt: reservation.ends_at });
+  }
+  return busy;
+}
+
+function defaultCrmHours(teamId: string, day: string): WeeklyHourRow[] {
+  const weekday = isoWeekday(day);
+  if (weekday > 5) return [];
+  return [
+    { teamId, isoWeekday: weekday, period: "MORNING", startsLocal: "08:00", endsLocal: "12:00" },
+    { teamId, isoWeekday: weekday, period: "AFTERNOON", startsLocal: "13:00", endsLocal: "17:00" },
+  ];
+}
+
 function placeholders(values: unknown[]): string {
   return values.map(() => "?").join(",");
 }
@@ -195,45 +239,55 @@ async function internalAvailability(value: unknown, now = new Date()): Promise<{
   `).bind(...taskCodes).all<{ code: string; requiredCapability: string | null }>();
   if (catalogRows.results.length !== taskCodes.length) throw new SchedulingInputError({ taskCodes: "Une prestation n’est plus disponible." });
   const requiredCapabilities = [...new Set(catalogRows.results.map(({ requiredCapability }) => requiredCapability).filter((item): item is string => Boolean(item)))];
-
-  const [teamsResult, capabilitiesResult, hoursResult] = await Promise.all([
-    database.prepare(`SELECT id, name FROM teams WHERE active = 1 ORDER BY code`).all<TeamRow>(),
-    database.prepare(`SELECT team_id AS teamId, capability FROM team_capabilities WHERE active = 1`).all<{ teamId: string; capability: string }>(),
-    database.prepare(`
-      SELECT team_id AS teamId, iso_weekday AS isoWeekday, period, starts_local AS startsLocal, ends_local AS endsLocal
-      FROM team_weekly_hours WHERE active = 1 ORDER BY team_id, iso_weekday, starts_local
-    `).all<WeeklyHourRow>(),
-  ]);
+  const useCrmPlanning = crmSchedulingEnabled();
+  const firstDate = localDate(now);
+  const extraDays = Math.ceil(halfDays / 10) * 7 + 7;
+  const lastGeneratedDate = addLocalDays(firstDate, area.zone!.maxAdvanceDays + extraDays);
+  const rangeEnd = zonedDateTime(lastGeneratedDate, "23:59").toISOString();
+  const crmSnapshot = useCrmPlanning
+    ? await getCrmPlanningSnapshot(firstDate, lastGeneratedDate, now.toISOString(), rangeEnd, now.toISOString())
+    : null;
+  const [teamsResult, capabilitiesResult, hoursResult] = useCrmPlanning
+    ? [{ results: crmSnapshot!.teams }, { results: [] as Array<{ teamId: string; capability: string }> }, { results: [] as WeeklyHourRow[] }]
+    : await Promise.all([
+      database.prepare(`SELECT id, name FROM teams WHERE active = 1 ORDER BY code`).all<TeamRow>(),
+      database.prepare(`SELECT team_id AS teamId, capability FROM team_capabilities WHERE active = 1`).all<{ teamId: string; capability: string }>(),
+      database.prepare(`
+        SELECT team_id AS teamId, iso_weekday AS isoWeekday, period, starts_local AS startsLocal, ends_local AS endsLocal
+        FROM team_weekly_hours WHERE active = 1 ORDER BY team_id, iso_weekday, starts_local
+      `).all<WeeklyHourRow>(),
+    ]);
   const capabilityMap = new Map<string, Set<string>>();
   for (const row of capabilitiesResult.results) {
     const set = capabilityMap.get(row.teamId) ?? new Set<string>();
     set.add(row.capability);
     capabilityMap.set(row.teamId, set);
   }
-  const teams = teamsResult.results.filter((team) => requiredCapabilities.every((capability) => capabilityMap.get(team.id)?.has(capability)));
+  // Le CRM n'expose pas encore une matrice de compétences par équipe. Tant que
+  // cette donnée n'est pas administrable dans le CRM, chaque équipe active est
+  // considérée apte aux prestations vendues en ligne.
+  const teams = useCrmPlanning ? teamsResult.results : teamsResult.results.filter((team) => requiredCapabilities.every((capability) => capabilityMap.get(team.id)?.has(capability)));
   if (!teams.length) return { result: { timezone: COMPANY_TIMEZONE, minimumLeadHours: area.zone!.minLeadHours, maximumAdvanceDays: area.zone!.maxAdvanceDays, holdMinutes: HOLD_TTL_MS / 60_000, options: [] }, internal: [] };
 
   const minimumStart = new Date(now.getTime() + area.zone!.minLeadHours * 60 * 60 * 1000);
   const maximumStart = new Date(now.getTime() + area.zone!.maxAdvanceDays * 24 * 60 * 60 * 1000);
-  const extraDays = Math.ceil(halfDays / 10) * 7 + 7;
-  const firstDate = localDate(now);
-  const lastGeneratedDate = addLocalDays(firstDate, area.zone!.maxAdvanceDays + extraDays);
-  const rangeEnd = zonedDateTime(lastGeneratedDate, "23:59").toISOString();
   const teamIds = teams.map(({ id }) => id);
-  const [unavailabilityResult, occupiedResult] = await Promise.all([
-    database.prepare(`
-      SELECT team_id AS teamId, starts_at AS startsAt, ends_at AS endsAt
-      FROM team_unavailabilities
-      WHERE team_id IN (${placeholders(teamIds)}) AND starts_at < ? AND ends_at > ?
-    `).bind(...teamIds, rangeEnd, now.toISOString()).all<BusyRange>(),
-    database.prepare(`
-      SELECT s.team_id AS teamId, s.starts_at AS startsAt, s.ends_at AS endsAt
-      FROM schedule_reservation_slots s
-      JOIN schedule_reservations r ON r.id = s.reservation_id
-      WHERE s.team_id IN (${placeholders(teamIds)}) AND s.status = 'ACTIVE' AND r.status = 'ACTIVE'
-        AND (r.expires_at IS NULL OR r.expires_at > ?) AND s.starts_at < ? AND s.ends_at > ?
-    `).bind(...teamIds, now.toISOString(), rangeEnd, now.toISOString()).all<BusyRange>(),
-  ]);
+  const [unavailabilityResult, occupiedResult] = useCrmPlanning
+    ? [{ results: [] as BusyRange[] }, { results: crmBusyRanges(crmSnapshot!, teamIds) }]
+    : await Promise.all([
+      database.prepare(`
+        SELECT team_id AS teamId, starts_at AS startsAt, ends_at AS endsAt
+        FROM team_unavailabilities
+        WHERE team_id IN (${placeholders(teamIds)}) AND starts_at < ? AND ends_at > ?
+      `).bind(...teamIds, rangeEnd, now.toISOString()).all<BusyRange>(),
+      database.prepare(`
+        SELECT s.team_id AS teamId, s.starts_at AS startsAt, s.ends_at AS endsAt
+        FROM schedule_reservation_slots s
+        JOIN schedule_reservations r ON r.id = s.reservation_id
+        WHERE s.team_id IN (${placeholders(teamIds)}) AND s.status = 'ACTIVE' AND r.status = 'ACTIVE'
+          AND (r.expires_at IS NULL OR r.expires_at > ?) AND s.starts_at < ? AND s.ends_at > ?
+      `).bind(...teamIds, now.toISOString(), rangeEnd, now.toISOString()).all<BusyRange>(),
+    ]);
   const busy = [...unavailabilityResult.results, ...occupiedResult.results];
   const hoursByTeam = new Map<string, WeeklyHourRow[]>();
   for (const row of hoursResult.results) {
@@ -244,11 +298,12 @@ async function internalAvailability(value: unknown, now = new Date()): Promise<{
 
   const grouped = new Map<string, InternalAvailability>();
   for (const team of teams) {
-    const weekly = hoursByTeam.get(team.id) ?? [];
+    const weekly = useCrmPlanning ? [] : hoursByTeam.get(team.id) ?? [];
     const periods: WorkPeriod[] = [];
     for (let offset = 0; offset <= area.zone!.maxAdvanceDays + extraDays; offset += 1) {
       const day = addLocalDays(firstDate, offset);
-      for (const hour of weekly.filter(({ isoWeekday: weekday }) => weekday === isoWeekday(day))) {
+      const dailyHours = useCrmPlanning ? defaultCrmHours(team.id, day) : weekly.filter(({ isoWeekday: weekday }) => weekday === isoWeekday(day));
+      for (const hour of dailyHours) {
         periods.push({
           teamId: team.id,
           teamName: team.name,
@@ -475,9 +530,31 @@ export async function createScheduleHold(quoteId: string, startsAtValue: unknown
       VALUES (?, ?, ?, 'SCHEDULE_HOLD_CREATED', 'quote', ?, ?)
     `).bind(crypto.randomUUID(), actor?.sessionKind === "CUSTOMER" ? actor.id : null, actor ? "USER" : "SYSTEM", quoteId, JSON.stringify({ reservationId: holdId, startsAt: option.startsAt, endsAt: option.endsAt, halfDays: option.halfDays })),
   );
+  let remoteReservationCreated = false;
+  if (crmSchedulingEnabled()) {
+    try {
+      if (current) await setRemoteScheduleReservationStatus(String(current.id), "released");
+      await createRemoteScheduleHold({
+        id: holdId,
+        quoteId,
+        teamId: chosen.teamId,
+        startsAt: option.startsAt,
+        endsAt: option.endsAt,
+        expiresAt,
+        customerName: typeof quote.requestSnapshot.fullName === "string" && quote.requestSnapshot.fullName.trim() ? quote.requestSnapshot.fullName.trim() : quote.contactEmail,
+        customerEmail: quote.contactEmail,
+        title: quote.tasks.map((task) => task.label).join(" · ").slice(0, 160) || "Réservation site internet",
+      });
+      remoteReservationCreated = true;
+    } catch (error) {
+      if (error instanceof CrmSchedulingConflictError) throw new SchedulingUnavailableError("SLOT_NO_LONGER_AVAILABLE");
+      throw error;
+    }
+  }
   try {
     await database.batch(statements);
   } catch (error) {
+    if (remoteReservationCreated) await setRemoteScheduleReservationStatus(holdId, "released").catch(() => undefined);
     if (String(error).match(/schedule_slots|UNIQUE constraint failed/iu)) throw new SchedulingUnavailableError("SLOT_NO_LONGER_AVAILABLE");
     if (String(error).match(/idempotency/iu)) throw new SchedulingConflictError("IDEMPOTENCY_KEY_REUSED");
     throw error;
@@ -500,4 +577,5 @@ export async function releaseScheduleHold(quoteId: string, actor: AuthUser | nul
       VALUES (?, ?, ?, 'SCHEDULE_HOLD_RELEASED', 'quote', ?)
     `).bind(crypto.randomUUID(), actor?.sessionKind === "CUSTOMER" ? actor.id : null, actor ? "USER" : "SYSTEM", quote.id),
   ]);
+  if (crmSchedulingEnabled()) await Promise.all(ids.map((id) => setRemoteScheduleReservationStatus(id, "released")));
 }

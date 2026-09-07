@@ -1,6 +1,7 @@
 import type Stripe from "stripe";
 import { getDatabase } from "@/db/runtime";
 import { orderInterventionStatements } from "@/modules/scheduling/service";
+import { crmSchedulingEnabled, setRemoteScheduleReservationStatus } from "@/modules/scheduling/crm-supabase";
 
 function metadata(object: Stripe.SetupIntent): { orderId: string; paymentId: string; quoteId: string; holdId: string } | null {
   const { orderId, paymentId, quoteId, holdId } = object.metadata ?? {};
@@ -71,6 +72,16 @@ export async function processStripeEvent(event: Stripe.Event): Promise<"processe
       database.prepare(`UPDATE provider_events SET status = 'PROCESSED', processed_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(eventId),
       ...orderInterventionStatements(database, ids.orderId),
     ]);
+    if (crmSchedulingEnabled()) {
+      try {
+        await setRemoteScheduleReservationStatus(ids.holdId, "confirmed", ids.orderId);
+      } catch (error) {
+        // La réservation locale est déjà confirmée : ne jamais faire échouer
+        // l'encaissement pour une indisponibilité temporaire du CRM. Le bloc
+        // reste néanmoins en base CRM et la prochaine reprise peut le confirmer.
+        console.error("crm-scheduling-confirmation", error);
+      }
+    }
     return "processed";
   }
 
