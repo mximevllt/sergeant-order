@@ -5,7 +5,7 @@ import { runtimeValue } from "@/config/runtime-environment";
  * doit jamais recevoir le préfixe NEXT_PUBLIC : aucune donnée de planning ou
  * de client n'est interrogée depuis le navigateur.
  */
-type CrmConfig = { url: string; secret: string };
+type CrmConfig = { url: string; secret: string; bookingTeamIds: string[] };
 
 export type CrmTeam = { id: string; name: string };
 export type CrmIntervention = { team_id: string | null; scheduled_date: string; start_time: string | null; end_time: string | null };
@@ -24,11 +24,12 @@ export class CrmSchedulingConflictError extends CrmSchedulingError {}
 function config(): CrmConfig | null {
   const url = runtimeValue("CRM_SUPABASE_URL").replace(/\/$/u, "");
   const secret = runtimeValue("CRM_SUPABASE_SECRET_KEY");
-  if (!url || !secret) return null;
+  const bookingTeamIds = [...new Set(runtimeValue("CRM_BOOKING_TEAM_IDS").split(",").map((id) => id.trim()).filter((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(id)))];
+  if (!url || !secret || !bookingTeamIds.length) return null;
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== "https:") return null;
-    return { url: parsed.toString().replace(/\/$/u, ""), secret };
+    return { url: parsed.toString().replace(/\/$/u, ""), secret, bookingTeamIds };
   } catch {
     return null;
   }
@@ -67,8 +68,10 @@ function query(table: string, params: Record<string, string>): string {
 }
 
 export async function getCrmPlanningSnapshot(from: string, to: string, startsAt: string, endsAt: string, nowIso: string): Promise<CrmPlanningSnapshot> {
+  const settings = config();
+  if (!settings) throw new CrmSchedulingError("CRM_SCHEDULING_NOT_CONFIGURED");
   const [teams, interventions, absences, siteReservations] = await Promise.all([
-    request<CrmTeam[]>(query("equipes", { select: "id,name", is_active: "eq.true", order: "name.asc" })),
+    request<CrmTeam[]>(query("equipes", { select: "id,name", is_active: "eq.true", id: `in.(${settings.bookingTeamIds.join(",")})`, order: "name.asc" })),
     request<CrmIntervention[]>(query("interventions", { select: "team_id,scheduled_date,start_time,end_time", and: `(scheduled_date.gte.${from},scheduled_date.lte.${to},status.neq.cancelled)` })),
     request<CrmAbsence[]>(query("planning_absences", { select: "team_id,starts_on,ends_on", starts_on: `lte.${to}`, "or": `(ends_on.is.null,ends_on.gte.${from})` })),
     request<CrmSiteReservation[]>(query("reservations_site", {
