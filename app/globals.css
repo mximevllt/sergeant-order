@@ -158,6 +158,51 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
 .tax-section > div:last-child > p { max-width: 460px; color: var(--sage); font-size: 17px; line-height: 1.7; }
 .advance { margin-top: 25px; padding: 9px 12px; display: inline-block; color: var(--paper); background: var(--ink); font-size: 8px; letter-spacing: .18em; text-transform: uppercase; }
 .tax-section .text-link { display: flex; width: 340px; }
+
+/* Crédit d'impôt */
+.credit-hero { min-height: min(790px, calc(100vh - 72px)); display: grid; grid-template-columns: 1.04fr .96fr; background: var(--paper); }
+.credit-hero-copy { max-width: 760px; padding: clamp(80px,10vw,145px) 7vw 82px; align-self: center; }
+.credit-hero-copy .section-label { margin-bottom: 40px; }
+.credit-kicker { color: var(--bronze); font-size: 11px; font-weight: 500; letter-spacing: .22em; text-transform: uppercase; }
+.credit-hero h1 { max-width: 700px; margin: 20px 0 28px; font-size: clamp(56px,6.1vw,94px); line-height: .92; }
+.credit-hero-copy > p:not(.credit-kicker) { max-width: 570px; color: var(--sage); font-size: 17px; line-height: 1.72; }
+.credit-hero-copy .button { margin-top: 36px; }
+.credit-hero-image { position: relative; min-height: 570px; overflow: hidden; background: var(--ink); }
+.credit-hero-image img { object-position: center 58%; filter: saturate(.72) contrast(.95); }
+.credit-hero-image::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg,rgba(33,46,35,.04),rgba(33,46,35,.2)); pointer-events: none; }
+.credit-hero-image figcaption { position: absolute; z-index: 1; top: clamp(35px,6vw,86px); left: clamp(25px,5vw,75px); width: min(365px,calc(100% - 50px)); padding: 25px 27px; color: var(--paper); background: rgba(33,46,35,.95); border: 1px solid rgba(246,244,235,.33); box-shadow: 14px 14px 0 rgba(246,244,235,.88); }
+.credit-hero-image figcaption strong { display: block; font-family: var(--display); font-size: clamp(68px,7.5vw,110px); line-height: .72; letter-spacing: -.065em; }
+.credit-hero-image figcaption span { display: block; margin-top: 18px; font-family: var(--display); font-size: 22px; line-height: 1.08; }
+.credit-intro { padding: 110px 7vw; display: grid; grid-template-columns: 1.1fr .9fr; align-items: end; gap: 9vw; background: #dedfd6; }
+.credit-intro h2, .credit-services h2, .credit-process h2, .credit-cta h2 { margin-top: 42px; font-size: clamp(45px,5.3vw,78px); line-height: .98; }
+.credit-intro > p { max-width: 470px; color: var(--sage); font-size: 16px; line-height: 1.75; }
+.credit-eligibility { display: grid; grid-template-columns: 1fr 1fr; color: var(--paper); background: var(--ink); }
+.credit-eligibility-visual { min-height: 620px; overflow: hidden; }
+.credit-eligibility-visual img { filter: saturate(.66) contrast(.92); object-position: center; }
+.credit-eligibility-copy { max-width: 630px; padding: 110px 8vw; align-self: center; }
+.credit-eligibility-copy h2 { margin: 42px 0 24px; font-size: clamp(48px,5.1vw,77px); line-height: .98; }
+.credit-eligibility-copy > p { max-width: 490px; color: rgba(246,244,235,.68); font-size: 16px; line-height: 1.7; }
+.credit-limit { max-width: 410px; margin-top: 38px; padding: 23px 25px; border-top: 1px solid rgba(246,244,235,.35); border-bottom: 1px solid rgba(246,244,235,.18); }
+.credit-limit span { display: block; color: var(--bronze); font-size: 9px; letter-spacing: .2em; text-transform: uppercase; }
+.credit-limit strong { display: block; margin-top: 7px; font-family: var(--display); font-size: 56px; line-height: 1; }
+.credit-limit p { margin-top: 8px; color: rgba(246,244,235,.62); font-size: 12px; }
+.credit-services { padding-top: 120px; padding-bottom: 120px; }
+.credit-services-heading { margin: 48px 0 64px; display: grid; grid-template-columns: 1.2fr .8fr; align-items: end; gap: 10vw; }
+.credit-services-heading > p { max-width: 420px; color: var(--sage); font-size: 16px; line-height: 1.72; }
+.credit-service-list { margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2,1fr); list-style: none; border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+.credit-service-list li { min-height: 88px; padding: 22px 25px; display: flex; align-items: center; gap: 18px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); font-family: var(--display); font-size: 22px; line-height: 1.1; }
+.credit-service-list span { flex: 0 0 25px; color: var(--bronze); font-family: var(--sans); font-size: 9px; letter-spacing: .15em; }
+.credit-process { padding: 120px 7vw; display: grid; grid-template-columns: .85fr 1.15fr; gap: 10vw; color: var(--paper); background: var(--ink); }
+.credit-process > div > p { max-width: 490px; margin-top: 26px; color: rgba(246,244,235,.66); font-size: 16px; line-height: 1.7; }
+.credit-process ol { margin: 0; padding: 0; list-style: none; border-top: 1px solid rgba(246,244,235,.2); }
+.credit-process li { padding: 27px 0; display: grid; grid-template-columns: 55px 1fr; gap: 15px; border-bottom: 1px solid rgba(246,244,235,.2); }
+.credit-process li span { color: var(--bronze); font-size: 10px; letter-spacing: .15em; }
+.credit-process li p { font-family: var(--display); font-size: clamp(21px,2.2vw,31px); line-height: 1.12; }
+.credit-notice { padding: 42px 7vw; color: #81332d; background: #f2e4dc; }
+.credit-notice p { max-width: 870px; margin: 0 auto; font-size: 15px; line-height: 1.65; }
+.credit-notice strong { font-family: var(--display); font-size: 19px; }
+.credit-cta { padding: 105px 7vw; display: flex; align-items: end; justify-content: space-between; gap: 50px; color: var(--paper); background: var(--plum); }
+.credit-cta h2 { max-width: 760px; }
 .recurring-section h2 { max-width: 900px; margin: 48px 0 65px; }
 .frequency-grid { display: grid; grid-template-columns: repeat(4,1fr); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
 .frequency-grid a { position: relative; min-height: 190px; padding: 30px 23px; text-align: left; cursor: pointer; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: transparent; font-family: var(--display); font-size: 24px; transition: color 160ms, background 160ms, transform 160ms; }
@@ -1068,6 +1113,16 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
   .rating p { margin-left: auto; }
   .testimonials { grid-template-columns: 1fr; }
   .tax-section { padding: 90px 6vw; gap: 50px; }
+  .credit-hero, .credit-eligibility, .credit-intro, .credit-process { grid-template-columns: 1fr; }
+  .credit-hero-copy { padding: 78px 6vw 68px; }
+  .credit-hero-image { min-height: 540px; }
+  .credit-intro { padding: 85px 6vw; gap: 36px; }
+  .credit-eligibility-visual { min-height: 440px; }
+  .credit-eligibility-copy { max-width: none; padding: 82px 6vw; }
+  .credit-services { padding-top: 90px; padding-bottom: 90px; }
+  .credit-services-heading { grid-template-columns: 1fr; gap: 30px; }
+  .credit-process { padding: 90px 6vw; gap: 55px; }
+  .credit-cta { padding: 85px 6vw; align-items: flex-start; flex-direction: column; }
   .frequency-grid { grid-template-columns: repeat(2,1fr); }
   .faq-section { padding: 90px 6vw; gap: 55px; }
   .footer-top { grid-template-columns: 1fr; gap: 35px; }
@@ -1089,6 +1144,16 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
   .rating p { width: 100%; margin: 12px 0 0; }
   .frequency-grid { grid-template-columns: 1fr; }
   .tax-section .text-link { width: 100%; min-width: 0; }
+  .credit-hero h1 { font-size: clamp(48px,13vw,66px); }
+  .credit-hero-image { min-height: 455px; }
+  .credit-hero-image figcaption { top: 28px; left: 22px; width: 255px; padding: 20px; box-shadow: 9px 9px 0 rgba(246,244,235,.88); }
+  .credit-hero-image figcaption span { margin-top: 13px; font-size: 17px; }
+  .credit-services-heading { margin: 42px 0 45px; }
+  .credit-service-list { grid-template-columns: 1fr; }
+  .credit-service-list li { min-height: 76px; padding: 18px; font-size: 20px; }
+  .credit-process li { grid-template-columns: 42px 1fr; }
+  .credit-process li p { font-size: 22px; }
+  .credit-notice { padding: 32px 6vw; }
 }
 
 @media (prefers-reduced-motion: reduce) {

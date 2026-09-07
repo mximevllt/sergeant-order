@@ -99,7 +99,7 @@ export default function Home() {
 
       <section className="tax-section">
         <div><SectionLabel number="04">Services à la personne</SectionLabel><h2>Votre jardin peut aussi coûter <em>deux fois moins cher.</em></h2></div>
-        <div><p>Certaines prestations d’entretien de jardin sont éligibles au crédit d’impôt de 50 %, dans la limite réglementaire applicable.</p><span className="advance">Avance immédiate disponible</span><Link className="text-link" href="/tarifs#fiscalite">Comprendre le crédit d’impôt <span>→</span></Link></div>
+        <div><p>Certaines prestations d’entretien de jardin sont éligibles au crédit d’impôt de 50 %, dans la limite réglementaire applicable.</p><span className="advance">Avance immédiate disponible</span><Link className="text-link" href="/credit-impot">Comprendre le crédit d’impôt <span>→</span></Link></div>
       </section>
 
       <section className="section recurring-section">
