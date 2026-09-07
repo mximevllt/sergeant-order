@@ -19,14 +19,27 @@ type AvailabilityState = "idle" | "loading" | "ready" | "error";
 const DRAFT_KEY = "sergeant-paysage-booking-draft-v1";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 
-const taskPresentation: Record<string, { title: string; image: string }> = {
-  MOWING: { title: "Tondre la pelouse", image: "/images/tonte-finitions.jpg" },
-  HEDGE_TRIMMING: { title: "Tailler les haies", image: "/images/haies-protege.png" },
-  BRUSH_CLEARING: { title: "Débroussailler", image: "/images/debroussaillage-service.png" },
-  FLOWER_BEDS: { title: "Désherber les massifs", image: "/images/massifs.jpg" },
-  GARDEN_CLEANING: { title: "Remettre au propre", image: "/images/nettoyage.jpg" },
-  COMPLETE_MAINTENANCE: { title: "Entretenir tout le jardin", image: "/images/entretien-complet.png" },
+const taskPresentation: Record<string, { title: string }> = {
+  MOWING: { title: "Tondre la pelouse" },
+  HEDGE_TRIMMING: { title: "Tailler les haies" },
+  BRUSH_CLEARING: { title: "Débroussailler" },
+  FLOWER_BEDS: { title: "Désherber les massifs" },
+  GARDEN_CLEANING: { title: "Remettre au propre" },
+  COMPLETE_MAINTENANCE: { title: "Entretenir tout le jardin" },
 };
+
+function TaskPictogram({ code }: { code: string }) {
+  const common = { fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  return <span className={`task-pictogram task-pictogram-${code.toLowerCase()}`} aria-hidden="true"><svg viewBox="0 0 96 96" role="img">
+    {code === "MOWING" && <><path {...common} d="M18 71h59M24 63l8-17h22l9 17M31 46h29M39 46l-7-15h19l7 15M67 63l7-18 9 4" /><circle {...common} cx="31" cy="72" r="7" /><circle {...common} cx="68" cy="72" r="7" /></>}
+    {code === "HEDGE_TRIMMING" && <><path {...common} d="M15 72h66M20 72V45c0-7 5-12 12-12h32c7 0 12 5 12 12v27M31 49h34M28 60h40" /><path {...common} d="m62 25 14-14M64 14l9 9M50 34l13-13" /></>}
+    {code === "BRUSH_CLEARING" && <><path {...common} d="M20 74h55M35 74l17-39M46 48l18 8M59 31l13-8M25 73l-4-20M31 73l2-25M69 74l7-17" /><circle {...common} cx="53" cy="33" r="7" /><path {...common} d="M21 53c-4-4-4-9 0-13M30 48c-3-3-3-7 0-10" /></>}
+    {code === "FLOWER_BEDS" && <><><path {...common} d="M16 73h64M48 72V47M48 47c-12 0-16-8-16-16 11 0 16 7 16 16ZM48 47c12 0 16-8 16-16-11 0-16 7-16 16Z" /><circle {...common} cx="48" cy="28" r="6" /><path {...common} d="M75 67 65 49M65 49l-6 12M65 49l10 1" /></></>}
+    {code === "GARDEN_CLEANING" && <><path {...common} d="M48 18v56M25 75h47M48 74l-18-14M48 74l18-14M30 60l-7 12M38 66l-7 10M58 66l7 10M66 60l7 12" /><path {...common} d="M20 30c7-8 17-5 19 4-9 4-16 1-19-4ZM67 38c5-7 14-7 19 0-6 6-14 6-19 0Z" /></>}
+    {code === "COMPLETE_MAINTENANCE" && <><circle {...common} cx="48" cy="48" r="29" /><path {...common} d="M48 30v36M30 48h36M36 36l24 24M60 36 36 60" /><path {...common} d="M48 21c-8 5-10 12-6 19 8-3 11-10 6-19ZM75 48c-5-8-12-10-19-6 3 8 10 11 19 6Z" /></>}
+    {!taskPresentation[code] && <><path {...common} d="M18 72h60M31 72V45c0-11 8-19 17-19s17 8 17 19v27" /><path {...common} d="M48 26V16M38 21l10-5 10 5" /></>}
+  </svg></span>;
+}
 
 const emptyTotals: TotalData = { intervention: 0, taskFee: 0, detailFee: 0, accessFee: 0, evacuation: 0, reduction: 0, total: 0, afterTax: 0 };
 
@@ -433,7 +446,7 @@ function StepNeeds({ tasks, catalogError, selected, toggleTask, unknownNeed, set
     <Intro eyebrow="Votre besoin" title="Que souhaitez-vous faire ?" copy="Vous pouvez sélectionner plusieurs tâches pour la même intervention." />
     {catalogError && <p className="pricing-error" role="alert">Le catalogue des prestations est momentanément indisponible.</p>}
     {!tasks.length && !catalogError && <p className="catalog-loading" role="status">Chargement des prestations disponibles…</p>}
-    <div className="task-grid">{tasks.map((task) => { const presentation = taskPresentation[task.code] ?? { title: task.label, image: "/images/entretien-complet.png" }; return <button type="button" key={task.code} className={selected.includes(task.code) ? "task-card selected" : "task-card"} onClick={() => toggleTask(task.code)} aria-pressed={selected.includes(task.code)}><Image src={presentation.image} alt="" width={1000} height={668} sizes="(max-width: 600px) 110px, 150px" /><div><small>{task.label}</small><strong>{presentation.title}</strong><span>{task.description}</span></div><i>{selected.includes(task.code) ? "✓" : "+"}</i></button>; })}</div>
+    <div className="task-grid">{tasks.map((task) => { const presentation = taskPresentation[task.code] ?? { title: task.label }; return <button type="button" key={task.code} className={selected.includes(task.code) ? "task-card selected" : "task-card"} onClick={() => toggleTask(task.code)} aria-pressed={selected.includes(task.code)}><TaskPictogram code={task.code} /><div><small>{task.label}</small><strong>{presentation.title}</strong><span>{task.description}</span></div><i>{selected.includes(task.code) ? "✓" : "+"}</i></button>; })}</div>
     <button type="button" className={`unknown-link${unknownNeed ? " selected" : ""}`} onClick={openUnknown} aria-expanded={unknownNeed}>Je ne sais pas exactement ce qu’il faut {unknownNeed ? "↑" : "→"}</button>
     {unknownNeed && <div className="unknown-panel"><h2>Montrez-nous simplement le jardin.</h2><p>Décrivez ce que vous observez et ajoutez quelques photos. L’équipe préparera la mission à partir de ces éléments.</p><label htmlFor="unknown-description">Ce qu’il faudrait améliorer<textarea id="unknown-description" value={unknownDescription} onChange={(event) => setUnknownDescription(event.target.value)} placeholder="Exemple : le jardin n’a pas été entretenu depuis plusieurs mois, je souhaite surtout qu’il soit remis au propre…" /></label><label className="unknown-upload"><input type="file" multiple accept="image/*" />+ Ajouter des photos</label></div>}
   </>;
