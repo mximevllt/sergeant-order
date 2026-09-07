@@ -1069,6 +1069,7 @@ h1 em, h2 em { color: var(--bronze); font-style: normal; }
   .custom-duration > div { margin-left: 0; }
   .custom-duration > small { width: 100%; }
   .waste-card > div, .slot-grid, .access-grid { grid-template-columns: 1fr; }
+  .task-card > i, .access-grid button i { display: grid; place-items: center; text-align: center; line-height: 1; }
   .date-strip { display: flex; overflow-x: auto; padding-bottom: 7px; }
   .date-strip button { flex: 0 0 78px; }
   .form-grid, .fake-card { grid-template-columns: 1fr; }
