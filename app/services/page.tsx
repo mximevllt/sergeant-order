@@ -3,7 +3,7 @@ import Link from "@/app/site-link";
 import { Footer, Header, SectionLabel } from "../components";
 
 const services = [
-  ["Tonte & finitions", "Pelouse, bordures et finitions nettes.", "/images/tonte.jpg", "/reserver?service=tonte"],
+  ["Tonte & finitions", "Pelouse, bordures et finitions nettes.", "/images/tonte-finitions.jpg", "/reserver?service=tonte"],
   ["Taille de haies", "Entretien courant, dessus et côtés.", "/images/haies.jpg", "/services/taille-haies"],
   ["Débroussaillage", "Zones denses, herbes hautes et ronces.", "/images/debroussaillage.jpg", "/reserver?service=debroussaillage"],
   ["Désherbage & massifs", "Massifs, graviers, pavés et potager.", "/images/massifs.jpg", "/reserver?service=massifs"],

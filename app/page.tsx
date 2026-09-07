@@ -3,7 +3,7 @@ import Link from "@/app/site-link";
 import { Footer, Header, SectionLabel } from "./components";
 
 const services = [
-  { name: "Tonte & finitions", desc: "Pelouse, bordures et nettoyage après tonte.", image: "/images/tonte.jpg" },
+  { name: "Tonte & finitions", desc: "Pelouse, bordures et nettoyage après tonte.", image: "/images/tonte-finitions.jpg" },
   { name: "Taille de haies", desc: "Une coupe nette, régulière et adaptée à vos végétaux.", image: "/images/haies.jpg" },
   { name: "Débroussaillage", desc: "Herbes hautes, végétation dense et zones difficiles.", image: "/images/debroussaillage.jpg" },
   { name: "Désherbage & massifs", desc: "Des massifs propres, aérés et remis en valeur.", image: "/images/massifs.jpg" },

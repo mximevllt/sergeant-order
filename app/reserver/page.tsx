@@ -20,7 +20,7 @@ const DRAFT_KEY = "sergeant-paysage-booking-draft-v1";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 
 const taskPresentation: Record<string, { title: string; image: string }> = {
-  MOWING: { title: "Tondre la pelouse", image: "/images/tonte.jpg" },
+  MOWING: { title: "Tondre la pelouse", image: "/images/tonte-finitions.jpg" },
   HEDGE_TRIMMING: { title: "Tailler les haies", image: "/images/haies.jpg" },
   BRUSH_CLEARING: { title: "Débroussailler", image: "/images/debroussaillage.jpg" },
   FLOWER_BEDS: { title: "Désherber les massifs", image: "/images/massifs.jpg" },
