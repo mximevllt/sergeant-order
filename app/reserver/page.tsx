@@ -29,15 +29,15 @@ const taskPresentation: Record<string, { title: string }> = {
 };
 
 function TaskPictogram({ code }: { code: string }) {
-  const common = { fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  const common = { fill: "none", stroke: "currentColor", strokeWidth: 2.5, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
   return <span className={`task-pictogram task-pictogram-${code.toLowerCase()}`} aria-hidden="true"><svg viewBox="0 0 96 96" role="img">
-    {code === "MOWING" && <><path {...common} d="M18 71h59M24 63l8-17h22l9 17M31 46h29M39 46l-7-15h19l7 15M67 63l7-18 9 4" /><circle {...common} cx="31" cy="72" r="7" /><circle {...common} cx="68" cy="72" r="7" /></>}
-    {code === "HEDGE_TRIMMING" && <><path {...common} d="M15 72h66M20 72V45c0-7 5-12 12-12h32c7 0 12 5 12 12v27M31 49h34M28 60h40" /><path {...common} d="m62 25 14-14M64 14l9 9M50 34l13-13" /></>}
-    {code === "BRUSH_CLEARING" && <><path {...common} d="M20 74h55M35 74l17-39M46 48l18 8M59 31l13-8M25 73l-4-20M31 73l2-25M69 74l7-17" /><circle {...common} cx="53" cy="33" r="7" /><path {...common} d="M21 53c-4-4-4-9 0-13M30 48c-3-3-3-7 0-10" /></>}
-    {code === "FLOWER_BEDS" && <><><path {...common} d="M16 73h64M48 72V47M48 47c-12 0-16-8-16-16 11 0 16 7 16 16ZM48 47c12 0 16-8 16-16-11 0-16 7-16 16Z" /><circle {...common} cx="48" cy="28" r="6" /><path {...common} d="M75 67 65 49M65 49l-6 12M65 49l10 1" /></></>}
-    {code === "GARDEN_CLEANING" && <><path {...common} d="M48 18v56M25 75h47M48 74l-18-14M48 74l18-14M30 60l-7 12M38 66l-7 10M58 66l7 10M66 60l7 12" /><path {...common} d="M20 30c7-8 17-5 19 4-9 4-16 1-19-4ZM67 38c5-7 14-7 19 0-6 6-14 6-19 0Z" /></>}
-    {code === "COMPLETE_MAINTENANCE" && <><circle {...common} cx="48" cy="48" r="29" /><path {...common} d="M48 30v36M30 48h36M36 36l24 24M60 36 36 60" /><path {...common} d="M48 21c-8 5-10 12-6 19 8-3 11-10 6-19ZM75 48c-5-8-12-10-19-6 3 8 10 11 19 6Z" /></>}
-    {!taskPresentation[code] && <><path {...common} d="M18 72h60M31 72V45c0-11 8-19 17-19s17 8 17 19v27" /><path {...common} d="M48 26V16M38 21l10-5 10 5" /></>}
+    {code === "MOWING" && <><path {...common} d="M15 76h66M18 76l5-7M29 76l-3-9M70 76l5-9" /><path {...common} d="M28 65h32l-5-20H35l-7 20Z" /><path {...common} d="M42 45 36 30h20l10 17M64 47l13-14" /><path {...common} d="M75 33l5 6" /><circle {...common} cx="34" cy="68" r="6" /><circle {...common} cx="57" cy="68" r="6" /><path {...common} d="M18 61c3-5 6-6 9-1M21 68c4-4 7-4 10 0" /></>}
+    {code === "HEDGE_TRIMMING" && <><path {...common} d="M16 75h64M18 75V44c0-8 6-14 14-14h24c8 0 14 6 14 14v31" /><path {...common} d="M24 45h42M24 57h42" /><path {...common} d="M53 27c3-9 13-12 19-7M39 30c-3-8-12-10-18-5" /><path {...common} d="m54 67 20-20 6 6-20 20-8 2 2-8Z" /><path {...common} d="m69 52 6 6M64 57l6 6M59 62l6 6" /></>}
+    {code === "BRUSH_CLEARING" && <><path {...common} d="M17 76h62M22 76l-4-9M31 76l-1-12M69 76l7-13" /><circle {...common} cx="42" cy="24" r="7" /><path {...common} d="M38 32 31 51l13 13 9-17-15-15ZM31 51l-9 16M44 64l10 12" /><path {...common} d="m50 41 22 15M61 49l6-10M70 55l9 2" /><circle {...common} cx="76" cy="59" r="7" /><path {...common} d="M71 65l10-11M69 72c4-4 8-5 12-1M17 62c3-5 7-5 10 0" /></>}
+    {code === "FLOWER_BEDS" && <><path {...common} d="M15 76h66M22 76c2-12 10-18 21-18s18 6 20 18" /><path {...common} d="M36 58V39M56 58V34M36 39c-8 0-12-5-12-12 8 0 12 5 12 12ZM36 39c8 0 12-5 12-12-8 0-12 5-12 12Z" /><path {...common} d="M56 34c-8 0-12-5-12-12 8 0 12 5 12 12ZM56 34c8 0 12-5 12-12-8 0-12 5-12 12Z" /><circle {...common} cx="36" cy="27" r="3" /><circle {...common} cx="56" cy="22" r="3" /><path {...common} d="m75 70-9-19M66 51l-7 11M66 51l10 1" /></>}
+    {code === "GARDEN_CLEANING" && <><path {...common} d="M16 76h65M47 22v45M29 68h36" /><path {...common} d="M29 68 23 55h48l-6 13M31 55l3 13M39 55l2 13M55 55l-2 13M63 55l-3 13" /><path {...common} d="M22 45c5-9 14-10 20-4-7 8-16 8-20 4ZM63 38c6-7 15-5 19 3-8 5-16 3-19-3ZM71 51c5-5 12-4 15 2-6 4-12 3-15-2Z" /></>}
+    {code === "COMPLETE_MAINTENANCE" && <><circle {...common} cx="36" cy="25" r="7" /><path {...common} d="M33 33 27 52l13 12 10-18-17-13ZM27 52l-9 17M40 64l8 12" /><path {...common} d="M50 43h19l10 20H54l-7-12M58 63v13M75 63v13" /><path {...common} d="M53 44h19M66 44l6-12M75 32l6 6" /><path {...common} d="M15 76h68M19 76l5-8M45 76l4-8" /></>}
+    {!taskPresentation[code] && <><path {...common} d="M16 76h64M24 76V48c0-13 10-23 24-23s24 10 24 23v28" /><path {...common} d="M31 49h34M48 25V16M39 21l9-5 9 5" /></>}
   </svg></span>;
 }
 
